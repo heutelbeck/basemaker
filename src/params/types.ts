@@ -79,7 +79,12 @@ export interface SlottaParams {
   offsetY: number;
 }
 
-export type LetteringStyle = 'engraved' | 'embossed';
+/**
+ * Embedded letters cut the surface and fill the recess as a colored part;
+ * raised letters stand on it; recessed letters cut only, leaving an empty
+ * engraving for painting.
+ */
+export type LetteringStyle = 'engraved' | 'embossed' | 'recessed';
 export type LetteringPlacement = 'top' | 'side';
 /**
  * Bundled faces plus arbitrary local system font family names. Unknown
@@ -106,6 +111,7 @@ export interface LetteringParams {
   margin: number;
   angleDeg: number;
   colorHex: string;
+  strokeBoostMm: number;
   style: LetteringStyle;
   placement: LetteringPlacement;
   font: LetteringFontFace;

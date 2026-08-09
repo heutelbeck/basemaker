@@ -97,9 +97,12 @@ export function buildStepPlaque(params: BaseParams, bottomOutline: Point2[]): Sh
       .lineTo([0, roll.length / 2])
       .close();
     let rollSolid = asShape3D(profile.sketchOnPlane('XZ').revolve());
-    for (const knobCenter of [roll.knobTopCenter, roll.knobBottomCenter]) {
-      const knobProfile = draw([0, knobCenter - roll.knobRadius])
-        .sagittaArcTo([0, knobCenter + roll.knobRadius], roll.knobRadius)
+    for (const [knobRadius, knobCenter] of [
+      [roll.knobTopRadius, roll.knobTopCenter],
+      [roll.knobBottomRadius, roll.knobBottomCenter],
+    ] as const) {
+      const knobProfile = draw([0, knobCenter - knobRadius])
+        .sagittaArcTo([0, knobCenter + knobRadius], knobRadius)
         .close();
       const knob = asShape3D(knobProfile.sketchOnPlane('XZ').revolve());
       rollSolid = asShape3D(rollSolid.fuse(knob));

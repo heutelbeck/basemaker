@@ -334,6 +334,8 @@ export function validate(params: BaseParams): ValidationIssue[] {
       }
       if (
         !(lettering.sizeMm > 0) ||
+        lettering.strokeBoostMm < 0 ||
+        lettering.strokeBoostMm > 0.4 ||
         (lettering.placement === 'top' && lettering.margin < lettering.sizeMm / 4)
       ) {
         issues.push({ code: 'lettering-values', message: ERROR_LETTERING_VALUES_INVALID });
@@ -346,7 +348,7 @@ export function validate(params: BaseParams): ValidationIssue[] {
           : hollow !== null
             ? hollow.wall
             : params.shape.diameter / 8;
-      const depthLimit = lettering.style === 'engraved' ? engraveLimit : 5;
+      const depthLimit = lettering.style === 'embossed' ? 5 : engraveLimit;
       if (!(lettering.depth > 0) || lettering.depth >= depthLimit) {
         issues.push({ code: 'lettering-depth', message: ERROR_LETTERING_DEPTH_INVALID });
       }

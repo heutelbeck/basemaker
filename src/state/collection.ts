@@ -101,6 +101,7 @@ function migrate(entry: StoredEntry): SavedBase {
     }
     if (migrated.job.params.lettering !== null) {
       migrated.job.params.lettering.style ??= 'engraved';
+      migrated.job.params.lettering.strokeBoostMm ??= 0;
       migrated.job.params.lettering.placement ??= 'top';
       migrated.job.params.lettering.font ??= 'sans';
     }

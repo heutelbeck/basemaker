@@ -170,7 +170,9 @@ function sideGlyphPlacer(
   params: BaseParams,
   radialFrom: number,
   verticalCenter: number,
-): (layout: { angle: number }) => (drawingPoints: [number, number][], extrudeBy: number) => Shape3D {
+): (layout: {
+  angle: number;
+}) => (drawingPoints: [number, number][], extrudeBy: number, boostMm?: number) => Shape3D {
   const wall = sideWallGeometry(params);
   const slopeDeg = (wall.slopeRad * 180) / Math.PI;
   const sinSlope = Math.sin(wall.slopeRad);
@@ -188,10 +190,10 @@ function sideGlyphPlacer(
         (radialFrom - plaqueProud(params)) * Math.tan(wall.slopeRad) +
         0.6 * plaqueProud(params) * Math.sin(wall.slopeRad),
     ];
-    return (drawingPoints, extrudeBy) =>
+    return (drawingPoints, extrudeBy, boostMm = 0) =>
       asShape3D(
         asShape3D(
-          asShape3D(polylineDrawing(drawingPoints).sketchOnPlane('XY').extrude(extrudeBy))
+          asShape3D(letterDrawing(drawingPoints, boostMm).sketchOnPlane('XY').extrude(extrudeBy))
             .rotate(90 - slopeDeg, [0, 0, 0], [1, 0, 0])
             .rotate(angleDeg + 90, [0, 0, 0], [0, 0, 1]),
         ).translate(anchor),
@@ -210,7 +212,7 @@ export function buildStepLetterParts(
   reference: Shape3D | null = null,
 ): Shape3D | null {
   const lettering = params.lettering;
-  if (lettering === null) {
+  if (lettering === null || lettering.style === 'recessed') {
     return null;
   }
   let letters: Shape3D | null = null;
@@ -218,12 +220,14 @@ export function buildStepLetterParts(
     letters = letters === null ? solid : asShape3D(letters.fuse(solid));
   };
   if (lettering.placement === 'top') {
-    const fromZ = lettering.style === 'engraved' ? params.height - lettering.depth : params.height;
+    const fromZ = lettering.style === 'embossed' ? params.height : params.height - lettering.depth;
     for (const group of textArcContourGroups(font, lettering, letteringBaselineRadius(params))) {
       let glyph: Shape3D | null = null;
       for (const contour of group.filter((candidate) => !candidate.isHole)) {
         const prism = asShape3D(
-          polylineDrawing(contour.points).sketchOnPlane('XY', fromZ).extrude(lettering.depth),
+          letterDrawing(contour.points, lettering.strokeBoostMm)
+            .sketchOnPlane('XY', fromZ)
+            .extrude(lettering.depth),
         );
         glyph = glyph === null ? prism : asShape3D(glyph.fuse(prism));
       }
@@ -232,7 +236,7 @@ export function buildStepLetterParts(
       }
       for (const contour of group.filter((candidate) => candidate.isHole)) {
         const prism = asShape3D(
-          polylineDrawing(contour.points)
+          letterDrawing(contour.points, -lettering.strokeBoostMm)
             .sketchOnPlane('XY', fromZ - CUT_EPSILON)
             .extrude(lettering.depth + 2 * CUT_EPSILON),
         );
@@ -243,7 +247,7 @@ export function buildStepLetterParts(
     return letters;
   }
   const clipReference = reference ?? buildStepShape({ ...params, lettering: null });
-  const engraved = lettering.style === 'engraved';
+  const engraved = lettering.style !== 'embossed';
   const radialFrom = plaqueProud(params) + (engraved ? -lettering.depth : -0.4);
   const thickness = engraved ? lettering.depth + 2 : lettering.depth + 0.4;
   const sideLayouts = layoutGlyphsOnArc(font, lettering, sideWallGeometry(params).radius);
@@ -252,14 +256,14 @@ export function buildStepLetterParts(
     const place = placerFor(layout);
     let glyph: Shape3D | null = null;
     for (const contour of layout.contours.filter((candidate) => !candidate.isHole)) {
-      const prism = place(contour.points, thickness);
+      const prism = place(contour.points, thickness, lettering.strokeBoostMm);
       glyph = glyph === null ? prism : asShape3D(glyph.fuse(prism));
     }
     if (glyph === null) {
       continue;
     }
     for (const contour of layout.contours.filter((candidate) => candidate.isHole)) {
-      const prism = place(contour.points, thickness + 2 * CUT_EPSILON);
+      const prism = place(contour.points, thickness + 2 * CUT_EPSILON, -lettering.strokeBoostMm);
       glyph = asShape3D(glyph.cut(prism));
     }
     addGlyph(
@@ -285,29 +289,29 @@ export function applyStepLettering(solid: Shape3D, params: BaseParams, font: Fon
   const reference = solid.clone();
   let result = solid;
   if (lettering.placement === 'top') {
-    const fromZ = lettering.style === 'engraved' ? params.height - lettering.depth : params.height;
+    const fromZ = lettering.style === 'embossed' ? params.height : params.height - lettering.depth;
     const groups = textArcContourGroups(font, lettering, letteringBaselineRadius(params));
     for (const group of groups) {
       for (const contour of group.filter((candidate) => !candidate.isHole)) {
         const prism = asShape3D(
-          polylineDrawing(contour.points)
+          letterDrawing(contour.points, lettering.strokeBoostMm)
             .sketchOnPlane('XY', fromZ)
-            .extrude(lettering.depth + (lettering.style === 'engraved' ? CUT_EPSILON : 0)),
+            .extrude(lettering.depth + (lettering.style === 'embossed' ? 0 : CUT_EPSILON)),
         );
-        result = asShape3D(lettering.style === 'engraved' ? result.cut(prism) : result.fuse(prism));
+        result = asShape3D(lettering.style === 'embossed' ? result.fuse(prism) : result.cut(prism));
       }
       for (const contour of group.filter((candidate) => candidate.isHole)) {
         const prism = asShape3D(
-          polylineDrawing(contour.points)
+          letterDrawing(contour.points, -lettering.strokeBoostMm)
             .sketchOnPlane('XY', fromZ)
-            .extrude(lettering.depth + (lettering.style === 'engraved' ? 0 : CUT_EPSILON)),
+            .extrude(lettering.depth + (lettering.style === 'embossed' ? CUT_EPSILON : 0)),
         );
-        result = asShape3D(lettering.style === 'engraved' ? result.fuse(prism) : result.cut(prism));
+        result = asShape3D(lettering.style === 'embossed' ? result.cut(prism) : result.fuse(prism));
       }
     }
     return result;
   }
-  const engraved = lettering.style === 'engraved';
+  const engraved = lettering.style !== 'embossed';
   const radialFrom = plaqueProud(params) + (engraved ? -lettering.depth : -0.4);
   const thickness = engraved ? lettering.depth + 2 : lettering.depth + 0.4;
   const applyLayouts = layoutGlyphsOnArc(font, lettering, sideWallGeometry(params).radius);
@@ -315,11 +319,11 @@ export function applyStepLettering(solid: Shape3D, params: BaseParams, font: Fon
   for (const layout of applyLayouts) {
     const place = placerFor(layout);
     for (const contour of layout.contours.filter((candidate) => !candidate.isHole)) {
-      const prism = place(contour.points, thickness);
+      const prism = place(contour.points, thickness, lettering.strokeBoostMm);
       result = asShape3D(engraved ? result.cut(prism) : result.fuse(prism));
     }
     for (const contour of layout.contours.filter((candidate) => candidate.isHole)) {
-      const prism = place(contour.points, thickness);
+      const prism = place(contour.points, thickness, -lettering.strokeBoostMm);
       if (engraved) {
         const island = asShape3D(prism.intersect(reference.clone()));
         result = asShape3D(result.fuse(island));
@@ -355,6 +359,12 @@ function magnetDrawings(params: BaseParams, magnets: MagnetParams, grow: number)
         : drawRectangle(magnets.length + 2 * grow, magnets.width + 2 * grow);
     return drawing.translate(x, y);
   });
+}
+
+/** Glyph contour drawing with the stroke boost applied per side. */
+function letterDrawing(points: [number, number][], boostMm: number): Drawing {
+  const drawing = polylineDrawing(points);
+  return Number.isFinite(boostMm) && boostMm !== 0 ? drawing.offset(boostMm) : drawing;
 }
 
 /**

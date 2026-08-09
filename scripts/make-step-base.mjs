@@ -125,6 +125,7 @@ if (process.argv[2] === '--smoke') {
     margin: 2,
     angleDeg: -90,
     colorHex: '#e8833a',
+    strokeBoostMm: 0,
     style: 'engraved',
     placement: 'top',
     font: 'sans',

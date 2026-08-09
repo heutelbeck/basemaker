@@ -192,7 +192,7 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
       } else {
         solids.push({ name: 'body', colorHex: BODY_COLOR, solid: buildBase(wasm, job.params, font) });
       }
-      if (lettering !== null && font !== null) {
+      if (lettering !== null && font !== null && lettering.style !== 'recessed') {
         solids.push({
           name: 'lettering',
           colorHex: lettering.colorHex,

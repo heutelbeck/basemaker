@@ -31,6 +31,7 @@ function lettering(overrides: Partial<LetteringParams> = {}): LetteringParams {
     margin: 2,
     angleDeg: -90,
     colorHex: '#e8833a',
+    strokeBoostMm: 0,
     style: 'engraved',
     placement: 'top',
     font: 'sans',

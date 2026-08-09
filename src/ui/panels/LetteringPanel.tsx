@@ -12,6 +12,7 @@ const DEFAULT_LETTERING: LetteringParams = {
   margin: 2,
   angleDeg: -90,
   colorHex: '#e8833a',
+  strokeBoostMm: 0,
   style: 'engraved',
   placement: 'side',
   font: 'sans',
@@ -268,6 +269,7 @@ export function LetteringPanel() {
               options={[
                 { value: 'engraved', label: 'Embedded (flush inlay)' },
                 { value: 'embossed', label: 'Raised on top' },
+                { value: 'recessed', label: 'Engraved (empty recess)' },
               ]}
               onChange={(style) => update({ style: style as LetteringParams['style'] })}
             />
@@ -334,6 +336,15 @@ export function LetteringPanel() {
               step={0.1}
               onChange={(depth) => update({ depth })}
             />
+            <NumberField
+              label="Stroke boost"
+              unit="mm"
+              value={lettering.strokeBoostMm}
+              min={0}
+              max={0.4}
+              step={0.05}
+              onChange={(strokeBoostMm) => update({ strokeBoostMm })}
+            />
           </div>
           <div className="field-row">
             {lettering.placement === 'top' && (
@@ -354,17 +365,22 @@ export function LetteringPanel() {
               onChange={(angleDeg) => update({ angleDeg })}
             />
           </div>
-          <label className="field">
-            <span className="field-label">Letter color (3MF export)</span>
-            <input
-              type="color"
-              value={lettering.colorHex}
-              onChange={(event) => update({ colorHex: event.target.value })}
-            />
-          </label>
+          {lettering.style !== 'recessed' && (
+            <label className="field">
+              <span className="field-label">Letter color (3MF export)</span>
+              <input
+                type="color"
+                value={lettering.colorHex}
+                onChange={(event) => update({ colorHex: event.target.value })}
+              />
+            </label>
+          )}
           <p className="freeform-hint">
-            Embedded letters sit flush in the surface; raised letters stand on it. Either way
-            the letters export as their own colored part for multi-material printing.
+            Embedded letters sit flush in the surface, raised letters stand on it (both export as
+            their own colored part); engraved letters leave an empty recess for painting. For
+            multi-color FDM, letters need about 2.5 mm size with a 0.4 mm nozzle or about 1.2 mm
+            with a 0.2 mm nozzle - below that, use stroke boost to fatten thin strokes, or engrave
+            and paint.
           </p>
         </>
       )}

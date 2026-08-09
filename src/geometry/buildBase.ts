@@ -190,7 +190,7 @@ export function buildBaseSingleSolid(
   params: BaseParams,
   font: Font | null = null,
 ): Manifold {
-  if (params.lettering === null || params.lettering.style === 'engraved' || font === null) {
+  if (params.lettering === null || params.lettering.style !== 'embossed' || font === null) {
     return buildBase(wasm, params, font);
   }
   return withGeometryScope((track) => {

@@ -144,7 +144,7 @@ export function plateSlabSpec(
 }
 
 export function scrollRollRadiusFor(plaque: PlaqueParams): number {
-  return Math.min(1.1, Math.max(0.45, plaque.heightMm * 0.2));
+  return Math.min(2, Math.max(0.3, plaque.heightMm * 0.2));
 }
 
 export function scrollSlabSpec(
@@ -224,8 +224,9 @@ export interface RollPlacement {
   azimuthRad: number;
   length: number;
   radius: number;
-  knobRadius: number;
+  knobTopRadius: number;
   knobTopCenter: number;
+  knobBottomRadius: number;
   knobBottomCenter: number;
 }
 
@@ -242,17 +243,21 @@ export function scrollRolls(
   const centerZ = (rollZ0 + rollZ1) / 2;
   const cosSlope = Math.cos(wallSlopeRad(params));
   const length = (rollZ1 - rollZ0) / cosSlope;
-  const knobRadius = radius * 1.12;
+  const knobFullRadius = radius * 1.12;
   const topRoom = Math.max(0, (params.height - 0.05 - rollZ1) / cosSlope);
   const bottomRoom = Math.max(0, (rollZ0 - 0.05) / cosSlope);
+  const knobFor = (room: number): { radius: number; center: number } => {
+    const knobRadius = Math.max(0.2, Math.min(knobFullRadius, room / 0.6));
+    return { radius: knobRadius, center: length / 2 - 0.4 * knobRadius };
+  };
   const centerS = spec.frame.centerFor((plaque.angleDeg * Math.PI) / 180);
   const axisOffset = plaque.thicknessMm * 0.4;
   return [centerS - plaque.widthMm / 2, centerS + plaque.widthMm / 2].map((s) => {
     const [anchorX, anchorY, anchorZ] = slabCorner(params, spec.frame, s, centerZ, axisOffset);
     const [nx, ny] = spec.frame.normalAt(s);
     const lift = anchorZ - centerZ;
-    const liftedTopRoom = Math.max(0, topRoom - lift / cosSlope);
-    const liftedBottomRoom = Math.max(0, bottomRoom + lift / cosSlope);
+    const topKnob = knobFor(Math.max(0, topRoom - lift / cosSlope));
+    const bottomKnob = knobFor(Math.max(0, bottomRoom + lift / cosSlope));
     return {
       anchorX,
       anchorY,
@@ -260,9 +265,10 @@ export function scrollRolls(
       azimuthRad: Math.atan2(ny, nx),
       length,
       radius,
-      knobRadius,
-      knobTopCenter: length / 2 + Math.min(liftedTopRoom, knobRadius * 0.6) - knobRadius,
-      knobBottomCenter: -(length / 2 + Math.min(liftedBottomRoom, knobRadius * 0.6) - knobRadius),
+      knobTopRadius: topKnob.radius,
+      knobTopCenter: topKnob.center,
+      knobBottomRadius: bottomKnob.radius,
+      knobBottomCenter: -bottomKnob.center,
     };
   });
 }
@@ -384,15 +390,15 @@ function rollMesh(
   const shaft = track(
     wasm.Manifold.cylinder(placement.length, placement.radius, placement.radius, 32, true),
   );
-  const knob = (zLocal: number): Manifold => {
-    const sphere = track(wasm.Manifold.sphere(placement.knobRadius, 32));
+  const knob = (radius: number, zLocal: number): Manifold => {
+    const sphere = track(wasm.Manifold.sphere(radius, 32));
     return track(sphere.translate(0, 0, zLocal));
   };
   const grouped = track(
     wasm.Manifold.union([
       shaft,
-      knob(placement.knobTopCenter),
-      knob(placement.knobBottomCenter),
+      knob(placement.knobTopRadius, placement.knobTopCenter),
+      knob(placement.knobBottomRadius, placement.knobBottomCenter),
     ]),
   );
   const slopeDeg = (wallSlopeRad(params) * 180) / Math.PI;

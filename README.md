@@ -82,6 +82,10 @@ The OAuth client id is injected at deploy time, never hard coded:
 
 Without the variable, the Drive panel falls back to asking the user for a client id, so self-hosted deployments keep working.
 
+## License
+
+Basemaker is MIT licensed (see `LICENSE`). All bundled libraries are compatible: MIT and Apache-2.0 dependencies impose only attribution, and the LGPL-2.1 OpenCascade kernel is used unmodified as a dynamically loaded WASM module, which satisfies its relinking requirement.
+
 ## Licenses of bundled components
 
 - Manifold (manifold-3d): Apache-2.0

@@ -1,4 +1,4 @@
-import type { Manifold, ManifoldToplevel } from 'manifold-3d';
+import type { CrossSection, Manifold, ManifoldToplevel } from 'manifold-3d';
 import type { Font } from 'opentype.js';
 import { topInsetFor } from '../../params/edgeProfile.ts';
 import type { BaseParams, LetteringParams } from '../../params/types.ts';
@@ -14,6 +14,18 @@ const ERROR_LETTERING_SHAPE = 'Lettering is only generated for round bases.';
 const SIDE_OUTSHOOT = 2;
 /** Radial embedment so embossed side letters bond with the curved wall. */
 const SIDE_EMBED = 0.4;
+
+/**
+ * Outward offset that fattens glyph strokes so small text survives the
+ * printer's extrusion width; counters shrink accordingly.
+ */
+function boostSection(
+  track: Track,
+  section: CrossSection,
+  boostMm: number,
+): CrossSection {
+  return boostMm > 0 ? track(section.offset(boostMm, 'Round', 2, 16)) : section;
+}
 
 export function letteringBaselineRadius(params: BaseParams): number {
   if (params.shape.kind !== 'round' || params.lettering === null) {
@@ -51,11 +63,15 @@ function topPrism(
 ): Manifold {
   const groups = textArcContourGroups(font, lettering, letteringBaselineRadius(params));
   const sections = groups.map((group) =>
-    track(
-      wasm.CrossSection.ofPolygons(
-        group.map((contour) => contour.points),
-        'EvenOdd',
+    boostSection(
+      track,
+      track(
+        wasm.CrossSection.ofPolygons(
+          group.map((contour) => contour.points),
+          'EvenOdd',
+        ),
       ),
+      lettering.strokeBoostMm,
     ),
   );
   const merged = sections.reduce((union, section) => track(union.add(section)));
@@ -86,11 +102,15 @@ function sideGlyphPrisms(
   const layouts: GlyphLayout[] = layoutGlyphsOnArc(font, lettering, wall.radius);
   const verticalCenter = glyphVerticalCenter(layouts);
   const prisms = layouts.map((layout) => {
-    const section = track(
-      wasm.CrossSection.ofPolygons(
-        layout.contours.map((contour) => contour.points),
-        'EvenOdd',
+    const section = boostSection(
+      track,
+      track(
+        wasm.CrossSection.ofPolygons(
+          layout.contours.map((contour) => contour.points),
+          'EvenOdd',
+        ),
       ),
+      lettering.strokeBoostMm,
     );
     const local = track(wasm.Manifold.extrude(section, thickness));
     const rotated = track(local.rotate(90 - slopeDeg, 0, (layout.angle * 180) / Math.PI + 90));
@@ -168,10 +188,10 @@ export function letteringSolids(
     throw new Error(ERROR_LETTERING_SHAPE);
   }
   if (lettering.placement === 'top') {
-    const fromZ = lettering.style === 'engraved' ? params.height - lettering.depth : params.height;
+    const fromZ = lettering.style === 'embossed' ? params.height : params.height - lettering.depth;
     return topPrism(wasm, track, font, params, lettering, fromZ, lettering.depth);
   }
-  if (lettering.style === 'engraved') {
+  if (lettering.style !== 'embossed') {
     const prisms = sideGlyphPrisms(
       wasm,
       track,
