@@ -1,7 +1,7 @@
 import type { ManifoldToplevel, SimplePolygon } from 'manifold-3d';
 import { withGeometryScope } from './dispose.ts';
-import type { Point2 } from './tessellation.ts';
-import { segmentsFor } from './tessellation.ts';
+import type { Point2 } from '../params/tessellation.ts';
+import { segmentsFor } from '../params/tessellation.ts';
 
 /**
  * Insets a convex outline polygon by `delta` mm (a true parallel offset, not

@@ -4,16 +4,18 @@ import { GENERATOR_LABELS, defaultJobFor } from './generators/job.ts';
 import { PreviewCanvas } from './preview/PreviewCanvas.tsx';
 import { bootstrapGeometry, useAppStore } from './state/store.ts';
 import { Select } from './ui/controls/Select.tsx';
+import { CrystalPanel, PlantsPanel, RockPanel } from './ui/panels/DecorPanels.tsx';
 import { AdapterTrayPanel, MovementTrayPanel } from './ui/panels/TrayPanels.tsx';
 import { BodyPanel } from './ui/panels/BodyPanel.tsx';
 import { CollectionPanel } from './ui/panels/CollectionPanel.tsx';
 import { ExportPanel } from './ui/panels/ExportPanel.tsx';
-import { LetteringPanel } from './ui/panels/LetteringPanel.tsx';
+import { LetteringPanel, SidePlaquePanel } from './ui/panels/LetteringPanel.tsx';
 import { LibraryPanel } from './ui/panels/LibraryPanel.tsx';
 import { MagnetsPanel } from './ui/panels/MagnetsPanel.tsx';
 import { RecessPanel } from './ui/panels/RecessPanel.tsx';
 import { ShapePanel } from './ui/panels/ShapePanel.tsx';
 import { SlottaPanel } from './ui/panels/SlottaPanel.tsx';
+import { SurfacePanel } from './ui/panels/SurfacePanel.tsx';
 
 export function App() {
   const parts = useAppStore((state) => state.parts);
@@ -21,6 +23,9 @@ export function App() {
   const busy = useAppStore((state) => state.busy);
   const issues = useAppStore((state) => state.issues);
   const generator = useAppStore((state) => state.job.generator);
+  const overhangOverlay = useAppStore((state) => state.overhangOverlay);
+  const showOverhangs = useAppStore((state) => state.showOverhangs);
+  const toggleOverhangs = useAppStore((state) => state.toggleOverhangs);
 
   useEffect(() => {
     bootstrapGeometry();
@@ -51,17 +56,26 @@ export function App() {
             <MagnetsPanel />
             <RecessPanel />
             <SlottaPanel />
+            <SurfacePanel />
             <LetteringPanel />
+            <SidePlaquePanel />
           </>
         )}
         <MovementTrayPanel />
         <AdapterTrayPanel />
+        <RockPanel />
+        <CrystalPanel />
+        <PlantsPanel />
         <ExportPanel />
         <LibraryPanel />
         <CollectionPanel />
       </aside>
       <main className="viewport">
-        <PreviewCanvas parts={parts} />
+        <PreviewCanvas
+          parts={parts}
+          overhangOverlay={overhangOverlay}
+          showOverhangs={showOverhangs}
+        />
         {busy && <div className="busy-badge">Rebuilding</div>}
         {issues.length > 0 && (
           <div className="stale-badge">
@@ -73,6 +87,15 @@ export function App() {
             {stats.sizeX.toFixed(1)} x {stats.sizeY.toFixed(1)} x {stats.sizeZ.toFixed(1)} mm
           </div>
         )}
+        <label className="overhang-toggle">
+          <input type="checkbox" checked={showOverhangs} onChange={toggleOverhangs} />
+          <span>
+            Overhangs
+            {stats !== null && stats.overhangAreaMm2 > 0.5 && (
+              <em> {stats.overhangAreaMm2.toFixed(0)} mm2 need support</em>
+            )}
+          </span>
+        </label>
       </main>
     </div>
   );

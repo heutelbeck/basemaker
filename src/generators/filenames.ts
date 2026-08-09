@@ -17,6 +17,8 @@ export function shapeSlug(shape: ShapeSpec): string {
       return `square-${shape.size}`;
     case 'rect':
       return `rect-${shape.length}x${shape.width}`;
+    case 'hex':
+      return `hex-${shape.size}`;
   }
 }
 

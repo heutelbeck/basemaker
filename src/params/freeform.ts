@@ -1,4 +1,4 @@
-import { segmentsFor } from '../geometry/tessellation.ts';
+import { segmentsFor } from './tessellation.ts';
 import type { Vec } from './polygon.ts';
 import { convexHull, smoothClosedCurve, toCounterClockwise } from './polygon.ts';
 import type { FreeformSpec } from './types.ts';

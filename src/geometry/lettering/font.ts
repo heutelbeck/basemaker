@@ -10,6 +10,17 @@ const parse: typeof opentype.parse =
 const loaded = new Map<LetteringFontFace, Promise<Font>>();
 const injected = new Map<LetteringFontFace, Font>();
 
+/**
+ * Registers a session-local font (e.g. from the Local Font Access API)
+ * under its family name so lettering can use it immediately.
+ */
+export function registerLocalFont(family: string, buffer: ArrayBuffer): Font {
+  const font = parse(buffer);
+  injected.set(family, font);
+  loaded.delete(family);
+  return font;
+}
+
 async function fetchFace(face: LetteringFontFace): Promise<Font> {
   const module =
     face === 'serif'

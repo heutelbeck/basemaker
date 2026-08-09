@@ -39,8 +39,16 @@ declare global {
   }
 }
 
+/**
+ * The OAuth client id shipped with the deployment, e.g. for the GitHub
+ * Pages build. Browser client ids are public identifiers, not secrets; a
+ * user-stored id still takes precedence for self-hosted setups.
+ */
+const BUILT_IN_CLIENT_ID = (import.meta.env.VITE_DRIVE_CLIENT_ID as string | undefined) ?? '';
+
 export function storedDriveClientId(): string {
-  return localStorage.getItem(CLIENT_ID_KEY) ?? '';
+  const stored = localStorage.getItem(CLIENT_ID_KEY);
+  return stored !== null && stored !== '' ? stored : BUILT_IN_CLIENT_ID;
 }
 
 export function storeDriveClientId(clientId: string): void {

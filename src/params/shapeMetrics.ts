@@ -9,7 +9,8 @@ export type ResolvedShape =
   | { type: 'circle'; r: number }
   | { type: 'ellipse'; a: number; b: number }
   | { type: 'stadium'; flank: number; r: number }
-  | { type: 'rect'; hx: number; hy: number };
+  | { type: 'rect'; hx: number; hy: number }
+  | { type: 'hex'; acrossFlats: number };
 
 export function resolveShape(shape: ShapeSpec): ResolvedShape {
   switch (shape.kind) {
@@ -29,6 +30,8 @@ export function resolveShape(shape: ShapeSpec): ResolvedShape {
       return { type: 'rect', hx: shape.size / 2, hy: shape.size / 2 };
     case 'rect':
       return { type: 'rect', hx: shape.length / 2, hy: shape.width / 2 };
+    case 'hex':
+      return { type: 'hex', acrossFlats: shape.size };
   }
 }
 
@@ -43,6 +46,8 @@ export function inradius(shape: ResolvedShape): number {
       return shape.r;
     case 'rect':
       return Math.min(shape.hx, shape.hy);
+    case 'hex':
+      return shape.acrossFlats / 2;
   }
 }
 
@@ -57,6 +62,8 @@ export function halfExtents(shape: ResolvedShape): { hx: number; hy: number } {
       return { hx: shape.flank + shape.r, hy: shape.r };
     case 'rect':
       return { hx: shape.hx, hy: shape.hy };
+    case 'hex':
+      return { hx: shape.acrossFlats / Math.sqrt(3), hy: shape.acrossFlats / 2 };
   }
 }
 
@@ -85,5 +92,14 @@ export function pointInShape(shape: ResolvedShape, x: number, y: number, inset =
     }
     case 'rect':
       return Math.abs(x) <= shape.hx - inset && Math.abs(y) <= shape.hy - inset;
+    case 'hex': {
+      const a = shape.acrossFlats / 2 - inset;
+      const c = Math.sqrt(3) / 2;
+      return (
+        Math.abs(y) <= a &&
+        Math.abs(x * c + y / 2) <= a &&
+        Math.abs(x * c - y / 2) <= a
+      );
+    }
   }
 }

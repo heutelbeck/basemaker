@@ -18,9 +18,9 @@ function roundBase(diameter: number, overrides: Partial<BaseParams> = {}): Job {
     params: {
       ...defaultParams(),
       shape: { kind: 'round', diameter },
-      height: 4,
-      edgeSlope: 1.5,
-      hollow: diameter >= 40 ? { wall: 2, topThickness: 1.2, supports: null } : null,
+      height: 3.4,
+      edgeSlope: 1.3,
+      hollow: diameter >= 40 ? { wall: 1.1, topThickness: 1, supports: null } : null,
       ...overrides,
     },
   };
@@ -32,14 +32,15 @@ function ovalBase(preset: ShapeSpec & { kind: 'gwOval' }): Job {
     params: {
       ...defaultParams(),
       shape: preset,
-      height: 4,
-      edgeSlope: 1.5,
-      hollow: { wall: 2, topThickness: 1.2, supports: null },
+      height: 3.4,
+      edgeSlope: 1.3,
+      hollow: { wall: 1.1, topThickness: 1, supports: null },
     },
   };
 }
 
-// Height and wall measured from an original WHFB/TOW infantry base.
+// All basic bases use the height, slope, and wall measured from an
+// original WHFB/TOW infantry base; GW publishes no official drawings.
 function squareBase(size: number): Job {
   return {
     generator: 'base',
@@ -72,9 +73,9 @@ function plainOvalBase(length: number, width: number): Job {
     params: {
       ...defaultParams(),
       shape: { kind: 'oval', length, width },
-      height: 4,
-      edgeSlope: 1.5,
-      hollow: { wall: 2, topThickness: 1.2, supports: null },
+      height: 3.4,
+      edgeSlope: 1.3,
+      hollow: { wall: 1.1, topThickness: 1, supports: null },
     },
   };
 }
@@ -93,7 +94,9 @@ function movementTray(pocketShape: ShapeSpec, cols: number, rows: number): Job {
   };
 }
 
-function lanceTray(pocketShape: ShapeSpec, cols: number, rows: number): Job {
+// The official lance wedge: rank r holds r + 1 knights, so ranks of
+// 2/3/4/5 give the 3/6/10/15 cavalry sizes sold as lance trays.
+function lanceTray(pocketShape: ShapeSpec, ranks: number): Job {
   return {
     generator: 'movementTray',
     params: {
@@ -101,8 +104,8 @@ function lanceTray(pocketShape: ShapeSpec, cols: number, rows: number): Job {
       pocketShape,
       pocketRotated: true,
       formation: 'lance',
-      cols,
-      rows,
+      cols: 1,
+      rows: ranks,
     },
   };
 }
@@ -193,13 +196,43 @@ export const GAME_LIBRARY: LibraryEntry[] = [
   { system: 'Age of Sigmar', name: 'Colossal 160 mm', job: roundBase(160) },
   {
     system: 'Age of Sigmar',
+    name: 'Movement tray 5x2 of 25 mm rounds',
+    job: movementTray({ kind: 'round', diameter: 25 }, 5, 2),
+  },
+  {
+    system: 'Age of Sigmar',
+    name: 'Movement tray 5x2 of 28.5 mm rounds',
+    job: movementTray({ kind: 'round', diameter: 28.5 }, 5, 2),
+  },
+  {
+    system: 'Age of Sigmar',
     name: 'Movement tray 5x2 of 32 mm rounds',
     job: movementTray({ kind: 'round', diameter: 32 }, 5, 2),
   },
   {
     system: 'Age of Sigmar',
+    name: 'Movement tray 3x2 of 40 mm rounds',
+    job: movementTray({ kind: 'round', diameter: 40 }, 3, 2),
+  },
+  {
+    system: 'Age of Sigmar',
+    name: 'Movement tray 3x1 of 60x35 ovals',
+    job: movementTray({ kind: 'gwOval', preset: '60x35' }, 3, 1),
+  },
+  {
+    system: 'Age of Sigmar',
     name: 'Loose skirmish tray 5x2 of 32 mm rounds',
     job: skirmishTray({ kind: 'round', diameter: 32 }, 5, 2, 2),
+  },
+  {
+    system: 'Warhammer 40k',
+    name: 'Movement tray 5x2 of 32 mm rounds',
+    job: movementTray({ kind: 'round', diameter: 32 }, 5, 2),
+  },
+  {
+    system: 'Warhammer 40k',
+    name: 'Loose skirmish tray 5x2 of 25 mm rounds',
+    job: skirmishTray({ kind: 'round', diameter: 25 }, 5, 2, 2),
   },
   { system: 'The Old World', name: 'Infantry 25 mm square', job: squareBase(25) },
   { system: 'The Old World', name: 'Heavy infantry 30 mm square', job: squareBase(30) },
@@ -240,8 +273,48 @@ export const GAME_LIBRARY: LibraryEntry[] = [
   },
   {
     system: 'The Old World',
-    name: 'Bretonnian lance 3x3 cavalry 30x60 mm',
-    job: lanceTray({ kind: 'rect', length: 60, width: 30 }, 3, 3),
+    name: 'Horde tray 5x4 of 25 mm squares',
+    job: movementTray({ kind: 'square', size: 25 }, 5, 4),
+  },
+  {
+    system: 'The Old World',
+    name: 'Movement tray 5x2 of 30 mm squares',
+    job: movementTray({ kind: 'square', size: 30 }, 5, 2),
+  },
+  {
+    system: 'The Old World',
+    name: 'Ogre tray 3x2 of 40 mm squares',
+    job: movementTray({ kind: 'square', size: 40 }, 3, 2),
+  },
+  {
+    system: 'The Old World',
+    name: 'Cavalry rank 5x1 of 30x60 mm',
+    job: movementTray({ kind: 'rect', length: 60, width: 30 }, 5, 1),
+  },
+  {
+    system: 'The Old World',
+    name: 'Cavalry block 5x2 of 30x60 mm',
+    job: movementTray({ kind: 'rect', length: 60, width: 30 }, 5, 2),
+  },
+  {
+    system: 'The Old World',
+    name: 'Bretonnian lance of 3 (2 ranks) 30x60 mm',
+    job: lanceTray({ kind: 'rect', length: 60, width: 30 }, 2),
+  },
+  {
+    system: 'The Old World',
+    name: 'Bretonnian lance of 6 (3 ranks) 30x60 mm',
+    job: lanceTray({ kind: 'rect', length: 60, width: 30 }, 3),
+  },
+  {
+    system: 'The Old World',
+    name: 'Bretonnian lance of 10 (4 ranks) 30x60 mm',
+    job: lanceTray({ kind: 'rect', length: 60, width: 30 }, 4),
+  },
+  {
+    system: 'The Old World',
+    name: 'Bretonnian lance of 15 (5 ranks) 30x60 mm',
+    job: lanceTray({ kind: 'rect', length: 60, width: 30 }, 5),
   },
   { system: 'Warhammer Fantasy (legacy)', name: 'Infantry 20 mm square', job: squareBase(20) },
   {
@@ -255,8 +328,33 @@ export const GAME_LIBRARY: LibraryEntry[] = [
   { system: 'Warhammer Fantasy (legacy)', name: 'Chariot 50x100 mm', job: rectBase(100, 50) },
   {
     system: 'Warhammer Fantasy (legacy)',
-    name: 'Bretonnian lance 3x3 cavalry 25x50 mm',
-    job: lanceTray({ kind: 'rect', length: 50, width: 25 }, 3, 3),
+    name: 'Movement tray 5x2 of 20 mm squares',
+    job: movementTray({ kind: 'square', size: 20 }, 5, 2),
+  },
+  {
+    system: 'Warhammer Fantasy (legacy)',
+    name: 'Horde tray 5x4 of 20 mm squares',
+    job: movementTray({ kind: 'square', size: 20 }, 5, 4),
+  },
+  {
+    system: 'Warhammer Fantasy (legacy)',
+    name: 'Movement tray 5x2 of 25 mm squares',
+    job: movementTray({ kind: 'square', size: 25 }, 5, 2),
+  },
+  {
+    system: 'Warhammer Fantasy (legacy)',
+    name: 'Cavalry rank 5x1 of 25x50 mm',
+    job: movementTray({ kind: 'rect', length: 50, width: 25 }, 5, 1),
+  },
+  {
+    system: 'Warhammer Fantasy (legacy)',
+    name: 'Bretonnian lance of 6 (3 ranks) 25x50 mm',
+    job: lanceTray({ kind: 'rect', length: 50, width: 25 }, 3),
+  },
+  {
+    system: 'Warhammer Fantasy (legacy)',
+    name: 'Bretonnian lance of 10 (4 ranks) 25x50 mm',
+    job: lanceTray({ kind: 'rect', length: 50, width: 25 }, 4),
   },
 ];
 

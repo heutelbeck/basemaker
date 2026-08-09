@@ -39,7 +39,7 @@ function lettering(overrides: Partial<LetteringParams> = {}): LetteringParams {
 }
 
 function params(overrides: Partial<BaseParams>): BaseParams {
-  return { ...defaultParams(), shape: { kind: 'round', diameter: 40 }, ...overrides };
+  return { ...defaultParams(), height: 4, edgeSlope: 1.5, shape: { kind: 'round', diameter: 40 }, ...overrides };
 }
 
 describe('text contours', () => {
@@ -105,8 +105,9 @@ describe('engraved bases', () => {
     const zipped = writeThreeMfParts(parts);
     const model = new TextDecoder().decode(unzipSync(zipped)['3D/3dmodel.model']);
     expect(model).toContain('displaycolor="#E8833AFF"');
-    expect((model.match(/<object /g) ?? []).length).toBe(2);
-    expect((model.match(/<item /g) ?? []).length).toBe(2);
+    expect((model.match(/<object /g) ?? []).length).toBe(3);
+    expect((model.match(/<component /g) ?? []).length).toBe(2);
+    expect((model.match(/<item /g) ?? []).length).toBe(1);
   });
 });
 

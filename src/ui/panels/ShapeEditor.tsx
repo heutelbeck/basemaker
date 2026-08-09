@@ -10,6 +10,7 @@ const KIND_LABELS: Record<ShapeSpec['kind'], string> = {
   pill: 'Pill',
   square: 'Square',
   rect: 'Rectangle',
+  hex: 'Hex',
 };
 
 const GW_PRESET_VALUES: GwOvalPreset[] = ['60x35', '75x42', '90x52', '105x70', '120x92', '170x105'];
@@ -28,6 +29,8 @@ export function defaultShapeFor(kind: ShapeSpec['kind']): ShapeSpec {
       return { kind: 'square', size: 25 };
     case 'rect':
       return { kind: 'rect', length: 50, width: 25 };
+    case 'hex':
+      return { kind: 'hex', size: 25 };
   }
 }
 
@@ -111,6 +114,15 @@ export function ShapeEditor({ shape, onChange }: ShapeEditorProps) {
           value={shape.size}
           min={5}
           onChange={(size) => onChange({ kind: 'square', size })}
+        />
+      )}
+      {shape.kind === 'hex' && (
+        <NumberField
+          label="Across flats"
+          unit="mm"
+          value={shape.size}
+          min={5}
+          onChange={(size) => onChange({ kind: 'hex', size })}
         />
       )}
     </>

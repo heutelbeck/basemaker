@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Point2 } from '../src/geometry/tessellation.ts';
+import type { Point2 } from '../src/params/tessellation.ts';
 import {
   MAX_SEGMENTS,
   MIN_SEGMENTS,
@@ -8,7 +8,7 @@ import {
   rectOutline,
   segmentsFor,
   stadiumOutline,
-} from '../src/geometry/tessellation.ts';
+} from '../src/params/tessellation.ts';
 import { signedArea } from '../src/geometry/outlines.ts';
 
 function midpoints(outline: Point2[]): Point2[] {

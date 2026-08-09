@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
 import { insetOutline, signedArea } from '../src/geometry/outlines.ts';
-import { circleOutline, rectOutline } from '../src/geometry/tessellation.ts';
+import { circleOutline, rectOutline } from '../src/params/tessellation.ts';
 
 describe('insetOutline', () => {
   it('insets a rectangle into a smaller exact rectangle', async () => {

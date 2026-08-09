@@ -30,6 +30,11 @@ export const SQUARE_PRESETS: SizePreset[] = [20, 25, 30, 40, 50].map((size) => (
   shape: { kind: 'square', size },
 }));
 
+export const HEX_PRESETS: SizePreset[] = [20, 25, 30, 35].map((size) => ({
+  label: `${size} mm`,
+  shape: { kind: 'hex', size },
+}));
+
 export const RECT_PRESETS: SizePreset[] = [
   { label: '50x25 mm', shape: { kind: 'rect', length: 50, width: 25 } },
   { label: '75x50 mm', shape: { kind: 'rect', length: 75, width: 50 } },
@@ -43,4 +48,5 @@ export const PRESETS_BY_KIND: Partial<Record<ShapeSpec['kind'], SizePreset[]>> =
   pill: PILL_PRESETS,
   square: SQUARE_PRESETS,
   rect: RECT_PRESETS,
+  hex: HEX_PRESETS,
 };

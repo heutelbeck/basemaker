@@ -16,7 +16,7 @@ import { defaultParams } from '../src/params/types.ts';
 import { validate } from '../src/params/validate.ts';
 
 function params(overrides: Partial<BaseParams>): BaseParams {
-  return { ...defaultParams(), ...overrides };
+  return { ...defaultParams(), height: 4, edgeSlope: 1.5, ...overrides };
 }
 
 function circlesSpec(): FreeformSpec {

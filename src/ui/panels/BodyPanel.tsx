@@ -1,5 +1,6 @@
 import { setBaseParams, useBaseParams } from '../../state/store.ts';
 import { NumberField } from '../controls/NumberField.tsx';
+import { Select } from '../controls/Select.tsx';
 import { Section } from './Section.tsx';
 
 export function BodyPanel() {
@@ -39,7 +40,7 @@ export function BodyPanel() {
         onToggle={(enabled) =>
           setBaseParams((current) => ({
             ...current,
-            hollow: enabled ? { wall: 2, topThickness: 1.2, supports: null } : null,
+            hollow: enabled ? { wall: 1.1, topThickness: 1, supports: null } : null,
           }))
         }
       >
@@ -84,13 +85,36 @@ export function BodyPanel() {
                       ? null
                       : {
                           ...current.hollow,
-                          supports: enabled ? { spacing: 15, diameter: 3 } : null,
+                          supports: enabled ? { style: 'pillars' as const, spacing: 15, diameter: 3 } : null,
                         },
                 }))
               }
             >
               {params.hollow.supports !== null && (
                 <>
+                  <Select
+                    label="Style"
+                    value={params.hollow.supports.style}
+                    options={[
+                      { value: 'pillars', label: 'Round pillars' },
+                      { value: 'grid', label: 'Rib grid (faster to print)' },
+                    ]}
+                    onChange={(style) =>
+                      setBaseParams((current) => ({
+                        ...current,
+                        hollow:
+                          current.hollow === null || current.hollow.supports === null
+                            ? current.hollow
+                            : {
+                                ...current.hollow,
+                                supports: {
+                                  ...current.hollow.supports,
+                                  style: style as 'pillars' | 'grid',
+                                },
+                              },
+                      }))
+                    }
+                  />
                   <div className="field-row">
                     <NumberField
                       label="Spacing"
@@ -112,11 +136,11 @@ export function BodyPanel() {
                       }
                     />
                     <NumberField
-                      label="Diameter"
+                      label={params.hollow.supports.style === 'grid' ? 'Rib thickness' : 'Diameter'}
                       unit="mm"
                       value={params.hollow.supports.diameter}
-                      min={1.5}
-                      step={0.5}
+                      min={0.8}
+                      step={0.2}
                       onChange={(diameter) =>
                         setBaseParams((current) => ({
                           ...current,

@@ -6,15 +6,16 @@ import type {
   MovementTrayParams,
   SheetInlayParams,
 } from '../../params/trays.ts';
-import { cellCenters, formationCenters, formationHull } from '../buildTray.ts';
+import { cellCenters, formationCenters, rankRects } from '../buildTray.ts';
 import { CUT_EPSILON } from '../features/shell.ts';
-import type { Point2 } from '../tessellation.ts';
-import { asShape3D, footprintDrawing, polylineDrawing } from './buildStepShape.ts';
+import type { Point2 } from '../../params/tessellation.ts';
+import { asShape3D, footprintDrawing } from './buildStepShape.ts';
 
 interface StepTrayLayout {
   pocketDrawing: Drawing;
   centers: Point2[];
   trayDrawing: Drawing;
+  bodyPieces: Drawing[] | null;
   pocketDepth: number;
   floor: number;
   edgeSlope: number;
@@ -44,22 +45,30 @@ export function buildStepMovementTray(params: MovementTrayParams): Shape3D {
   const pitchX = 2 * phx + params.gap;
   const pitchY = 2 * phy + params.gap;
   const centers = formationCenters(params.formation, params.rows, params.cols, pitchX, pitchY);
-  const trayDrawing =
-    params.formation === 'grid'
-      ? drawRectangle(
-          params.cols * pitchX - params.gap + 2 * params.rim,
-          params.rows * pitchY - params.gap + 2 * params.rim,
-        )
-      : (() => {
-          const hull = polylineDrawing(
-            formationHull(centers, phx + params.gap / 2, phy + params.gap / 2),
-          );
-          return params.rim > 0 ? hull.offset(params.rim) : hull;
-        })();
+  let trayDrawing: Drawing;
+  let bodyPieces: Drawing[] | null = null;
+  if (params.formation === 'grid') {
+    trayDrawing = drawRectangle(
+      params.cols * pitchX - params.gap + 2 * params.rim,
+      params.rows * pitchY - params.gap + 2 * params.rim,
+    );
+  } else {
+    const rects = rankRects(centers, phx, phy, params.rim);
+    bodyPieces = rects.map((rect) => {
+      const [minX, minY] = rect[0];
+      const [maxX, maxY] = rect[2];
+      return drawRectangle(maxX - minX, maxY - minY).translate(
+        (minX + maxX) / 2,
+        (minY + maxY) / 2,
+      );
+    });
+    trayDrawing = bodyPieces.reduce((merged, piece) => merged.fuse(piece));
+  }
   return buildStepTray({
     pocketDrawing: grownPocketDrawing(pocket, params.clearance, params.pocketRotated),
     centers,
     trayDrawing,
+    bodyPieces,
     pocketDepth: params.pocketDepth,
     floor: params.floor,
     edgeSlope: params.edgeSlope,
@@ -79,6 +88,7 @@ export function buildStepAdapterTray(params: AdapterTrayParams): Shape3D {
       params.cols * pitchX + 2 * params.rim,
       params.rows * pitchY + 2 * params.rim,
     ),
+    bodyPieces: null,
     pocketDepth: params.pocketDepth,
     floor: params.floor,
     edgeSlope: params.edgeSlope,
@@ -86,17 +96,26 @@ export function buildStepAdapterTray(params: AdapterTrayParams): Shape3D {
   });
 }
 
-function buildStepTray(layout: StepTrayLayout): Shape3D {
-  const height = layout.floor + layout.pocketDepth;
-  const bottomSketch = layout.trayDrawing.sketchOnPlane('XY') as Sketch;
-  let tray = asShape3D(
-    layout.edgeSlope > 0
+function trayBlock(drawing: Drawing, height: number, edgeSlope: number): Shape3D {
+  const bottomSketch = drawing.sketchOnPlane('XY') as Sketch;
+  return asShape3D(
+    edgeSlope > 0
       ? bottomSketch.loftWith(
-          layout.trayDrawing.offset(-layout.edgeSlope).sketchOnPlane('XY', height) as Sketch,
+          drawing.offset(-edgeSlope).sketchOnPlane('XY', height) as Sketch,
           { ruled: true },
         )
       : bottomSketch.extrude(height),
   );
+}
+
+function buildStepTray(layout: StepTrayLayout): Shape3D {
+  const height = layout.floor + layout.pocketDepth;
+  let tray =
+    layout.bodyPieces === null
+      ? trayBlock(layout.trayDrawing, height, layout.edgeSlope)
+      : layout.bodyPieces
+          .map((piece) => trayBlock(piece, height, layout.edgeSlope))
+          .reduce((merged, block) => asShape3D(merged.fuse(block)));
 
   for (const [x, y] of layout.centers) {
     const cutter = asShape3D(

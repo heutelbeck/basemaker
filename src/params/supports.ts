@@ -5,7 +5,7 @@ import { polygonContains } from './polygon.ts';
 import { halfExtents, pointInShape, resolveShape } from './shapeMetrics.ts';
 import type { BaseParams } from './types.ts';
 import { SLOTTA_RIM } from './types.ts';
-import { magnetPositions } from './validate.ts';
+import { magnetCenters } from './magnetLayout.ts';
 
 /** Pillars stay clear of the hollow rim by this much so they never merge. */
 const GAP_TO_WALL = 1;
@@ -69,8 +69,8 @@ function blockedSpots(params: BaseParams, pillarRadius: number): (x: number, y: 
         ? magnets.diameter / 2
         : Math.hypot(magnets.length, magnets.width) / 2) + magnets.padding;
     const keepOut = housingRadius + pillarRadius + AVOID_MARGIN;
-    for (const mx of magnetPositions(magnets.count, magnets.spacing, magnets.offsetX)) {
-      checks.push((x, y) => Math.hypot(x - mx, y - magnets.offsetY) < keepOut);
+    for (const [mx, my] of magnetCenters(params)) {
+      checks.push((x, y) => Math.hypot(x - mx, y - my) < keepOut);
     }
   }
   const slotta = params.slotta;

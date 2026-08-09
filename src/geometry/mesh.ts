@@ -1,4 +1,4 @@
-import type { Manifold } from 'manifold-3d';
+import type { Manifold, ManifoldToplevel, Mesh } from 'manifold-3d';
 
 /** Plain, transferable triangle mesh in mm. */
 export interface RawMesh {
@@ -21,4 +21,15 @@ export function toRawMesh(manifold: Manifold): RawMesh {
     positions[v * 3 + 2] = vertProperties[v * numProp + 2];
   }
   return { positions, indices: triVerts.slice() };
+}
+
+/** Rebuilds a kernel mesh from a raw mesh, e.g. to re-union cached parts. */
+export function toManifoldMesh(wasm: ManifoldToplevel, mesh: RawMesh): Mesh {
+  const kernelMesh = new wasm.Mesh({
+    numProp: 3,
+    vertProperties: mesh.positions.slice(),
+    triVerts: mesh.indices.slice(),
+  });
+  kernelMesh.merge();
+  return kernelMesh;
 }

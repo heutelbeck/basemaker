@@ -1,17 +1,12 @@
 import type { Font } from 'opentype.js';
 import { pointInPolygon } from '../../params/polygon.ts';
 import type { LetteringParams } from '../../params/types.ts';
-import type { Point2 } from '../tessellation.ts';
+import type { Point2 } from '../../params/tessellation.ts';
 
 /** Cap height of the DejaVu bold faces as a fraction of the em size. */
 const CAP_HEIGHT_RATIO = 0.72;
 const CURVE_STEPS = 8;
 
-/**
- * Average glyph advance as a fraction of the cap height, used to estimate
- * text width without loading the font (validation runs synchronously).
- */
-export const APPROX_ADVANCE_RATIO = 0.62 / CAP_HEIGHT_RATIO;
 
 export interface GlyphContour {
   points: Point2[];
@@ -143,27 +138,59 @@ export function layoutGlyphsOnArc(
  * toward the base center, so text at the default front position reads
  * upright from above.
  */
-export function textArcContours(
+/**
+ * Arc-placed contours grouped per glyph. Consumers must merge glyphs with
+ * a boolean union: flattening all glyphs into one even-odd polygon set
+ * inverts the fill wherever two glyphs overlap.
+ */
+export function textArcContourGroups(
   font: Font,
   lettering: LetteringParams,
   baselineRadius: number,
-): GlyphContour[] {
-  const contours: GlyphContour[] = [];
+): GlyphContour[][] {
+  const groups: GlyphContour[][] = [];
   for (const layout of layoutGlyphsOnArc(font, lettering, baselineRadius)) {
     const cos = Math.cos(layout.angle);
     const sin = Math.sin(layout.angle);
     const tangent: Point2 = [-sin, cos];
     const up: Point2 = [-cos, -sin];
     const origin: Point2 = [baselineRadius * cos, baselineRadius * sin];
-    for (const contour of layout.contours) {
-      contours.push({
+    groups.push(
+      layout.contours.map((contour) => ({
         isHole: contour.isHole,
-        points: contour.points.map(([lx, ly]) => [
+        points: contour.points.map(([lx, ly]): Point2 => [
           origin[0] + lx * tangent[0] + ly * up[0],
           origin[1] + lx * tangent[1] + ly * up[1],
         ]),
-      });
+      })),
+    );
+  }
+  return groups;
+}
+
+export function textArcContours(
+  font: Font,
+  lettering: LetteringParams,
+  baselineRadius: number,
+): GlyphContour[] {
+  return textArcContourGroups(font, lettering, baselineRadius).flat();
+}
+
+/**
+ * Vertical center of the actual laid-out glyph outlines. Fonts overshoot
+ * their nominal cap height differently, so centering on measured extents
+ * is the only way side lettering lands exactly mid-wall for every font.
+ */
+export function glyphVerticalCenter(layouts: GlyphLayout[]): number {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const layout of layouts) {
+    for (const contour of layout.contours) {
+      for (const [, y] of contour.points) {
+        min = Math.min(min, y);
+        max = Math.max(max, y);
+      }
     }
   }
-  return contours;
+  return min === Infinity ? 0 : (min + max) / 2;
 }

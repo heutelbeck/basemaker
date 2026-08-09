@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BaseParams } from '../src/params/types.ts';
 import { defaultParams } from '../src/params/types.ts';
-import { magnetPositions, validate } from '../src/params/validate.ts';
+import { magnetPositions } from '../src/params/magnetLayout.ts';
+import { validate } from '../src/params/validate.ts';
 
 function params(overrides: Partial<BaseParams>): BaseParams {
   return { ...defaultParams(), ...overrides };
@@ -20,6 +21,7 @@ describe('validate', () => {
       hollow: { wall: 2, topThickness: 1.5, supports: null },
       magnets: {
         shape: 'round',
+        layout: 'line',
         diameter: 5,
         length: 5,
         width: 5,
@@ -60,6 +62,7 @@ describe('validate', () => {
       {
         magnets: {
           shape: 'round',
+          layout: 'line',
           diameter: 5,
           length: 5,
           width: 5,
@@ -78,6 +81,7 @@ describe('validate', () => {
       {
         magnets: {
           shape: 'round',
+          layout: 'line',
           diameter: 5,
           length: 5,
           width: 5,
@@ -96,6 +100,7 @@ describe('validate', () => {
       {
         magnets: {
           shape: 'round',
+          layout: 'line',
           diameter: 5,
           length: 5,
           width: 5,
@@ -122,6 +127,7 @@ describe('validate', () => {
         slotta: { length: 20, width: 3, angleDeg: 0, offsetX: 0, offsetY: 0 },
         magnets: {
           shape: 'round',
+          layout: 'line',
           diameter: 5,
           length: 5,
           width: 5,
@@ -200,5 +206,43 @@ describe('magnetPositions', () => {
 
   it('spreads multiple magnets symmetrically around the offset', () => {
     expect(magnetPositions(3, 10, 0)).toEqual([-10, 0, 10]);
+  });
+});
+
+describe('magnet layouts', () => {
+  it('spreads grid and equal-area layouts inside the footprint', async () => {
+    const { magnetCenters } = await import('../src/params/magnetLayout.ts');
+    const { pointInShape, resolveShape } = await import('../src/params/shapeMetrics.ts');
+    const base = params({
+      shape: { kind: 'round', diameter: 60 },
+      magnets: {
+        shape: 'round',
+        layout: 'grid',
+        diameter: 5,
+        length: 5,
+        width: 2,
+        depth: 2,
+        count: 5,
+        spacing: 8,
+        offsetX: 0,
+        offsetY: 0,
+        padding: 1.5,
+      },
+    });
+    const resolved = resolveShape({ kind: 'round', diameter: 60 });
+    for (const layout of ['grid', 'even'] as const) {
+      const layouted = {
+        ...base,
+        magnets: { ...(base.magnets ?? ({} as never)), layout },
+      };
+      const centers = magnetCenters(layouted);
+      expect(centers).toHaveLength(5);
+      for (const [x, y] of centers) {
+        expect(pointInShape(resolved, x, y, 4)).toBe(true);
+      }
+      const unique = new Set(centers.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`));
+      expect(unique.size).toBe(5);
+      expect(magnetCenters(layouted)).toEqual(centers);
+    }
   });
 });

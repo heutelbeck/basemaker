@@ -8,7 +8,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { setOC } from 'replicad';
+import { makeCompound, setOC } from 'replicad';
 
 const require = createRequire(import.meta.url);
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -41,6 +41,7 @@ const font = initFontFromBuffer(
 );
 
 const { buildStepShape } = await import('../src/geometry/step/buildStepShape.ts');
+const { buildStepBaseParts } = await import('../src/geometry/step/buildStepBase.ts');
 const { buildStepAdapterTray, buildStepMovementTray } =
   await import('../src/geometry/step/buildStepTray.ts');
 const { defaultAdapterTrayParams, defaultMovementTrayParams } =
@@ -131,6 +132,31 @@ if (process.argv[2] === '--smoke') {
   cases.push(
     ['lettered-top', { ...defaultParams(), shape: { kind: 'round', diameter: 40 }, lettering }],
     [
+      'plated',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 40 },
+        plaque: { style: 'plate', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.7, rivetHeightMm: 0.2, colorHex: '#9AA5B1' },
+      },
+    ],
+    [
+      'scrolled',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 40 },
+        plaque: { style: 'scroll', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1' },
+      },
+    ],
+    [
+      'scrolled-lettered',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 40 },
+        plaque: { style: 'scroll', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1' },
+        lettering: { ...lettering, sizeMm: 1.2, placement: 'side' },
+      },
+    ],
+    [
       'lettered-side-embossed',
       {
         ...defaultParams(),
@@ -140,7 +166,8 @@ if (process.argv[2] === '--smoke') {
     ],
   );
   for (const [name, params] of cases) {
-    const shape = buildStepShape(params, font);
+    const pieces = buildStepBaseParts(params, font);
+    const shape = pieces.length > 1 ? makeCompound(pieces) : pieces[0];
     const blob = shape.blobSTEP();
     const bytes = (await blob.arrayBuffer()).byteLength;
     console.log(`${name}: STEP ${bytes} bytes`);
@@ -154,6 +181,17 @@ if (process.argv[2] === '--smoke') {
         ...defaultMovementTrayParams(),
         pocketShape: { kind: 'round', diameter: 32 },
         gap: 1,
+      }),
+    ],
+    [
+      'lance-tray',
+      buildStepMovementTray({
+        ...defaultMovementTrayParams(),
+        pocketShape: { kind: 'rect', length: 60, width: 30 },
+        pocketRotated: true,
+        formation: 'lance',
+        cols: 1,
+        rows: 3,
       }),
     ],
   ];

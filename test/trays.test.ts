@@ -83,12 +83,16 @@ describe('movement tray', () => {
 });
 
 describe('formations', () => {
-  it('staggers lance columns back from the center column', async () => {
+  it('lays the official triangular lance wedge: rank r holds r + 1 knights', async () => {
     const { formationCenters } = await import('../src/geometry/buildTray.ts');
-    const centers = formationCenters('lance', 3, 3, 25, 50);
-    const centerColumnYs = centers.filter(([x]) => Math.abs(x) < 1e-9).map(([, y]) => y);
-    const flankColumnYs = centers.filter(([x]) => Math.abs(x - 25) < 1e-9).map(([, y]) => y);
-    expect(Math.min(...flankColumnYs) - Math.min(...centerColumnYs)).toBeCloseTo(25, 9);
+    const centers = formationCenters('lance', 3, 1, 25, 50);
+    expect(centers).toHaveLength(6);
+    const front = centers.filter(([, y]) => Math.abs(y - 50) < 1e-9);
+    const middle = centers.filter(([, y]) => Math.abs(y) < 1e-9);
+    const rear = centers.filter(([, y]) => Math.abs(y + 50) < 1e-9);
+    expect(front.map(([x]) => x)).toEqual([0]);
+    expect(middle.map(([x]) => x).sort((a, b) => a - b)).toEqual([-12.5, 12.5]);
+    expect(rear.map(([x]) => x).sort((a, b) => a - b)).toEqual([-25, 0, 25]);
   });
 
   it('offsets alternate skirmish rows by half a pitch', async () => {
@@ -108,7 +112,7 @@ describe('formations', () => {
         pocketRotated: true,
         formation: 'lance',
         rows: 3,
-        cols: 3,
+        cols: 1,
         rim: 3,
         edgeSlope: 0,
       }),
@@ -117,7 +121,17 @@ describe('formations', () => {
     expect(tray.volume()).toBeGreaterThan(0);
     const box = tray.boundingBox();
     expect(box.max[0] - box.min[0]).toBeCloseTo(3 * (25 + 0.4) + 6, 1);
-    expect(box.max[1] - box.min[1]).toBeCloseTo(3 * (50 + 0.4) + (50 + 0.4) / 2 + 6, 1);
+    expect(box.max[1] - box.min[1]).toBeCloseTo(3 * (50 + 0.4) + 6, 1);
+    const tipSlab = wasm.Manifold.cube([200, 0.5, 20], true).translate(
+      0,
+      (3 * (50 + 0.4) + 6) / 2 - 0.25,
+      0,
+    );
+    const tip = tray.intersect(tipSlab);
+    const tipBox = tip.boundingBox();
+    expect(tipBox.max[0] - tipBox.min[0]).toBeCloseTo(25 + 0.4 + 6, 1);
+    tipSlab.delete();
+    tip.delete();
     tray.delete();
   });
 

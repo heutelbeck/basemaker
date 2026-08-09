@@ -3,7 +3,7 @@ import { resolveShape } from '../../params/shapeMetrics.ts';
 import type { ConverterSpec } from '../../params/types.ts';
 import type { Track } from '../dispose.ts';
 import { outsetOutline } from '../outlines.ts';
-import { outlineFor } from '../tessellation.ts';
+import { outlineFor } from '../../params/tessellation.ts';
 import { CUT_EPSILON } from './shell.ts';
 
 /**

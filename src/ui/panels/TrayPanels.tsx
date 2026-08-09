@@ -26,23 +26,28 @@ interface TrayNumbers {
 function TrayCommonFields({
   values,
   onChange,
+  lance = false,
 }: {
   values: TrayNumbers;
   onChange: (change: Partial<TrayNumbers>) => void;
+  lance?: boolean;
 }) {
+  const lanceModels = (values.rows * (values.rows + 1)) / 2;
   return (
     <>
       <div className="field-row">
+        {!lance && (
+          <NumberField
+            label="Columns"
+            value={values.cols}
+            min={1}
+            max={20}
+            step={1}
+            onChange={(cols) => onChange({ cols: Math.max(1, Math.round(cols)) })}
+          />
+        )}
         <NumberField
-          label="Columns"
-          value={values.cols}
-          min={1}
-          max={20}
-          step={1}
-          onChange={(cols) => onChange({ cols: Math.max(1, Math.round(cols)) })}
-        />
-        <NumberField
-          label="Rows"
+          label={lance ? `Ranks (${lanceModels} models)` : 'Rows'}
           value={values.rows}
           min={1}
           max={20}
@@ -189,7 +194,7 @@ export function MovementTrayPanel() {
             update({ formation: formation as MovementTrayParams['formation'] })
           }
         />
-        <TrayCommonFields values={params} onChange={update} />
+        <TrayCommonFields values={params} onChange={update} lance={params.formation === 'lance'} />
         <NumberField
           label="Gap between pockets"
           unit="mm"

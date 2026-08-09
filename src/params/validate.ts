@@ -1,5 +1,6 @@
-import { APPROX_ADVANCE_RATIO } from '../geometry/lettering/textOutlines.ts';
 import { topInsetFor } from './edgeProfile.ts';
+import { magnetCenters } from './magnetLayout.ts';
+import { validateSurface } from './surface.ts';
 import { freeformOutline } from './freeform.ts';
 import type { Vec } from './polygon.ts';
 import {
@@ -12,7 +13,7 @@ import {
 import type { ResolvedShape } from './shapeMetrics.ts';
 import { inradius, pointInShape, resolveShape } from './shapeMetrics.ts';
 import type { BaseParams, FreeformSpec, MagnetParams, ShapeSpec, SlottaParams } from './types.ts';
-import { SLOTTA_RIM } from './types.ts';
+import { APPROX_ADVANCE_RATIO, SLOTTA_RIM } from './types.ts';
 
 export interface ValidationIssue {
   code: string;
@@ -47,7 +48,7 @@ const ERROR_HOLLOW_WALL_TOO_THICK =
 const ERROR_LIP_RADIUS_INVALID =
   'The lip radius must not be negative and must be smaller than the base height.';
 const ERROR_HOLLOW_SUPPORTS_INVALID =
-  'The support pillar diameter must be between 1.5 mm and 8 mm with spacing of at least the diameter plus 4 mm.';
+  'Support pillars need a diameter of 1.5 mm to 8 mm, grid ribs a thickness of 0.8 mm to 8 mm, with spacing of at least the size plus 4 mm.';
 const ERROR_LETTERING_DEPTH_INVALID =
   'The lettering depth must leave material behind the engraving.';
 const ERROR_LETTERING_SIDE_UNSUPPORTED =
@@ -66,6 +67,10 @@ const ERROR_MAGNET_OUTSIDE_FOOTPRINT =
 const ERROR_MAGNET_SPACING_TOO_SMALL =
   'The magnet spacing must be at least the magnet footprint size.';
 const ERROR_MAGNET_TOO_DEEP = 'The magnet depth plus padding must be smaller than the base height.';
+const ERROR_PLAQUE_DOES_NOT_FIT =
+  'The plaque must fit its side: within one flat side on straight-edged bases, at most 300 degrees around on round ones, and at least 0.6 mm shorter than the base height minus the lip.';
+const ERROR_PLAQUE_VALUES_INVALID =
+  'The plaque width and height must be positive, the thickness between 0.2 and 2 mm, and the rivet height between 0 and 0.6 mm.';
 const ERROR_QUALITY_OUT_OF_RANGE = 'The chord tolerance must be between 0.002 mm and 0.5 mm.';
 const ERROR_RECESS_INSET_TOO_LARGE =
   'The recess inset must be smaller than half the smallest footprint dimension.';
@@ -84,7 +89,7 @@ function shapeDimensionIssues(shape: ShapeSpec): ValidationIssue[] {
   const dims: number[] = [];
   if (shape.kind === 'round') {
     dims.push(shape.diameter);
-  } else if (shape.kind === 'square') {
+  } else if (shape.kind === 'square' || shape.kind === 'hex') {
     dims.push(shape.size);
   } else if (shape.kind !== 'gwOval') {
     dims.push(shape.length, shape.width);
@@ -242,8 +247,9 @@ export function validate(params: BaseParams): ValidationIssue[] {
         issues.push({ code: 'hollow-top', message: ERROR_HOLLOW_TOP_TOO_THICK });
       }
       if (hollow.supports !== null) {
-        const { spacing, diameter } = hollow.supports;
-        if (diameter < 1.5 || diameter > 8 || spacing < diameter + 4 || spacing > 60) {
+        const { style, spacing, diameter } = hollow.supports;
+        const minSize = style === 'grid' ? 0.8 : 1.5;
+        if (diameter < minSize || diameter > 8 || spacing < diameter + 4 || spacing > 60) {
           issues.push({ code: 'hollow-supports', message: ERROR_HOLLOW_SUPPORTS_INVALID });
         }
       }
@@ -262,11 +268,15 @@ export function validate(params: BaseParams): ValidationIssue[] {
       if (magnets.depth + magnets.padding >= params.height) {
         issues.push({ code: 'magnet-depth', message: ERROR_MAGNET_TOO_DEEP });
       }
-      if (magnets.count > 1 && magnets.spacing < 2 * (halfX + magnets.padding)) {
+      if (
+        magnets.layout === 'line' &&
+        magnets.count > 1 &&
+        magnets.spacing < 2 * (halfX + magnets.padding)
+      ) {
         issues.push({ code: 'magnet-spacing', message: ERROR_MAGNET_SPACING_TOO_SMALL });
       }
-      const fits = magnetPositions(magnets.count, magnets.spacing, magnets.offsetX).every((x) =>
-        rectCorners(halfX + magnets.padding, halfY + magnets.padding, 0, x, magnets.offsetY).every(
+      const fits = magnetCenters(params).every(([cx, cy]) =>
+        rectCorners(halfX + magnets.padding, halfY + magnets.padding, 0, cx, cy).every(
           ([px, py]) => footprint.contains(px, py, topInset),
         ),
       );
@@ -307,7 +317,7 @@ export function validate(params: BaseParams): ValidationIssue[] {
       if (!fits) {
         issues.push({ code: 'slotta-fit', message: ERROR_SLOTTA_OUTSIDE_FOOTPRINT });
       }
-      if (magnets !== null && slottaTouchesMagnets(slotta, magnets)) {
+      if (magnets !== null && slottaTouchesMagnets(slotta, magnets, magnetCenters(params))) {
         issues.push({ code: 'slotta-magnet-overlap', message: ERROR_SLOTTA_OVERLAPS_MAGNETS });
       }
     }
@@ -387,6 +397,55 @@ export function validate(params: BaseParams): ValidationIssue[] {
     }
   }
 
+  if (params.plaque !== null) {
+    const plaque = params.plaque;
+    if (
+      !(plaque.widthMm > 0) ||
+      !(plaque.heightMm > 0) ||
+      !(plaque.thicknessMm >= 0.2) ||
+      plaque.thicknessMm > 2 ||
+      !(plaque.rivetHeightMm > 0) ||
+      plaque.rivetHeightMm > 0.6
+    ) {
+      issues.push({ code: 'plaque-values', message: ERROR_PLAQUE_VALUES_INVALID });
+    }
+    const plaqueSpec = params.shape.kind === 'converter' ? params.shape.outer : params.shape;
+    let widthLimit = Infinity;
+    if (plaqueSpec.kind === 'round') {
+      const wallRadius = plaqueSpec.diameter / 2 - params.edgeSlope / 2;
+      widthLimit = Math.max(wallRadius, 0.01) * ((300 * Math.PI) / 180);
+    } else if (plaqueSpec.kind === 'square') {
+      widthLimit = plaqueSpec.size - 0.8;
+    } else if (plaqueSpec.kind === 'rect') {
+      const angle = ((plaque.angleDeg % 360) + 360) % 360;
+      const facingX = angle < 45 || angle > 315 || (angle > 135 && angle < 225);
+      widthLimit = (facingX ? plaqueSpec.width : plaqueSpec.length) - 0.8;
+    } else if (plaqueSpec.kind === 'hex') {
+      widthLimit = plaqueSpec.size / Math.sqrt(3) - 0.8;
+    } else if (plaqueSpec.kind !== 'freeform') {
+      const boundary = sampleBoundary(resolveShape(plaqueSpec), 96);
+      let perimeter = 0;
+      for (let i = 0; i < boundary.length; i++) {
+        const [x1, y1] = boundary[i];
+        const [x2, y2] = boundary[(i + 1) % boundary.length];
+        perimeter += Math.hypot(x2 - x1, y2 - y1);
+      }
+      widthLimit = perimeter * 0.45;
+    }
+    if (
+      plaque.widthMm > widthLimit ||
+      plaque.heightMm > params.height - params.lipRadius - 0.6
+    ) {
+      issues.push({ code: 'plaque-fit', message: ERROR_PLAQUE_DOES_NOT_FIT });
+    }
+  }
+
+  if (params.surface !== null) {
+    issues.push(
+      ...validateSurface(params.surface, params.height, hollow !== null ? hollow.topThickness : null),
+    );
+  }
+
   if (!(params.quality.chordTolMm >= 0.002) || !(params.quality.chordTolMm <= 0.5)) {
     issues.push({ code: 'quality', message: ERROR_QUALITY_OUT_OF_RANGE });
   }
@@ -399,15 +458,19 @@ export function validate(params: BaseParams): ValidationIssue[] {
  * magnet slot grown by its padding. The slot rect is rotated, so the test
  * runs in the slot's own frame where it is axis-aligned.
  */
-function slottaTouchesMagnets(slotta: SlottaParams, magnets: MagnetParams): boolean {
+function slottaTouchesMagnets(
+  slotta: SlottaParams,
+  magnets: MagnetParams,
+  centers: [number, number][],
+): boolean {
   const angle = (-slotta.angleDeg * Math.PI) / 180;
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   const halfLength = slotta.length / 2 + SLOTTA_RIM;
   const halfWidth = slotta.width / 2 + SLOTTA_RIM;
-  return magnetPositions(magnets.count, magnets.spacing, magnets.offsetX).some((x) => {
+  return centers.some(([x, y]) => {
     const dx = x - slotta.offsetX;
-    const dy = magnets.offsetY - slotta.offsetY;
+    const dy = y - slotta.offsetY;
     const localX = dx * cos - dy * sin;
     const localY = dx * sin + dy * cos;
     if (magnets.shape === 'round') {
@@ -424,10 +487,4 @@ function slottaTouchesMagnets(slotta: SlottaParams, magnets: MagnetParams): bool
 }
 
 /** Center X positions of a row of `count` magnets spaced `spacing` apart. */
-export function magnetPositions(count: number, spacing: number, offsetX: number): number[] {
-  const positions: number[] = [];
-  for (let i = 0; i < count; i++) {
-    positions.push(offsetX + i * spacing - ((count - 1) * spacing) / 2);
-  }
-  return positions;
-}
+

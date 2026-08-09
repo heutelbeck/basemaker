@@ -4,7 +4,8 @@ import { topInsetFor } from '../../params/edgeProfile.ts';
 import type { BaseParams, LetteringParams } from '../../params/types.ts';
 import type { Track } from '../dispose.ts';
 import type { GlyphLayout } from '../lettering/textOutlines.ts';
-import { layoutGlyphsOnArc, textArcContours } from '../lettering/textOutlines.ts';
+import { glyphVerticalCenter, layoutGlyphsOnArc, textArcContourGroups } from '../lettering/textOutlines.ts';
+import { plaqueProud } from './plaque.ts';
 import { CUT_EPSILON } from './shell.ts';
 
 const ERROR_LETTERING_SHAPE = 'Lettering is only generated for round bases.';
@@ -48,14 +49,17 @@ function topPrism(
   fromZ: number,
   thickness: number,
 ): Manifold {
-  const contours = textArcContours(font, lettering, letteringBaselineRadius(params));
-  const section = track(
-    wasm.CrossSection.ofPolygons(
-      contours.map((contour) => contour.points),
-      'EvenOdd',
+  const groups = textArcContourGroups(font, lettering, letteringBaselineRadius(params));
+  const sections = groups.map((group) =>
+    track(
+      wasm.CrossSection.ofPolygons(
+        group.map((contour) => contour.points),
+        'EvenOdd',
+      ),
     ),
   );
-  const prism = track(wasm.Manifold.extrude(section, thickness));
+  const merged = sections.reduce((union, section) => track(union.add(section)));
+  const prism = track(wasm.Manifold.extrude(merged, thickness));
   return track(prism.translate(0, 0, fromZ));
 }
 
@@ -80,6 +84,7 @@ function sideGlyphPrisms(
   const sinSlope = Math.sin(wall.slopeRad);
   const cosSlope = Math.cos(wall.slopeRad);
   const layouts: GlyphLayout[] = layoutGlyphsOnArc(font, lettering, wall.radius);
+  const verticalCenter = glyphVerticalCenter(layouts);
   const prisms = layouts.map((layout) => {
     const section = track(
       wasm.CrossSection.ofPolygons(
@@ -92,12 +97,13 @@ function sideGlyphPrisms(
     const cos = Math.cos(layout.angle);
     const sin = Math.sin(layout.angle);
     const up = [-sinSlope * cos, -sinSlope * sin, cosSlope];
-    const normal = [cosSlope * cos, cosSlope * sin, sinSlope];
-    const halfSize = lettering.sizeMm / 2;
     const anchor = [
-      wall.radius * cos - halfSize * up[0] + radialFrom * normal[0],
-      wall.radius * sin - halfSize * up[1] + radialFrom * normal[1],
-      wall.centerZ - halfSize * up[2] + radialFrom * normal[2],
+      wall.radius * cos - verticalCenter * up[0] + radialFrom * cos,
+      wall.radius * sin - verticalCenter * up[1] + radialFrom * sin,
+      wall.centerZ -
+        verticalCenter * up[2] +
+        (radialFrom - plaqueProud(params)) * Math.tan(wall.slopeRad) +
+        0.6 * plaqueProud(params) * Math.sin(wall.slopeRad),
     ];
     return track(rotated.translate(anchor[0], anchor[1], anchor[2]));
   });
@@ -139,7 +145,7 @@ export function letteringCutter(
     font,
     params,
     lettering,
-    -lettering.depth,
+    plaqueProud(params) - lettering.depth,
     lettering.depth + SIDE_OUTSHOOT,
   );
 }
@@ -172,7 +178,7 @@ export function letteringSolids(
       font,
       params,
       lettering,
-      -lettering.depth,
+      plaqueProud(params) - lettering.depth,
       lettering.depth + SIDE_OUTSHOOT,
     );
     return track(prisms.intersect(referenceBody));
@@ -183,7 +189,7 @@ export function letteringSolids(
     font,
     params,
     lettering,
-    -SIDE_EMBED,
+    plaqueProud(params) - SIDE_EMBED,
     lettering.depth + SIDE_EMBED,
   );
   return track(prisms.subtract(referenceBody));

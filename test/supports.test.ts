@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { buildBase } from '../src/geometry/buildBase.ts';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
-import { segmentsFor } from '../src/geometry/tessellation.ts';
+import { segmentsFor } from '../src/params/tessellation.ts';
 import { supportPillarCenters } from '../src/params/supports.ts';
 import type { BaseParams, HollowParams } from '../src/params/types.ts';
 import { defaultParams } from '../src/params/types.ts';
 import { validate } from '../src/params/validate.ts';
 
 function hollow(overrides: Partial<HollowParams> = {}): HollowParams {
-  return { wall: 2, topThickness: 1.2, supports: { spacing: 15, diameter: 3 }, ...overrides };
+  return { wall: 2, topThickness: 1.2, supports: { style: 'pillars', spacing: 15, diameter: 3 }, ...overrides };
 }
 
 function params(overrides: Partial<BaseParams>): BaseParams {
-  return { ...defaultParams(), ...overrides };
+  return { ...defaultParams(), height: 4, edgeSlope: 1.5, ...overrides };
 }
 
 describe('support pillar centers', () => {
@@ -54,6 +54,7 @@ describe('support pillar centers', () => {
         hollow: hollow(),
         magnets: {
           shape: 'round',
+          layout: 'line',
           diameter: 5,
           length: 5,
           width: 5,
@@ -92,6 +93,27 @@ describe('support pillar centers', () => {
   });
 });
 
+describe('grid rib supports', () => {
+  it('adds a rib lattice clear of the rim inside the cavity', async () => {
+    const wasm = await getManifold();
+    const shape = { kind: 'round', diameter: 60 } as const;
+    const plain = buildBase(wasm, params({ shape, hollow: hollow({ supports: null }) }));
+    const gridded = buildBase(
+      wasm,
+      params({
+        shape,
+        hollow: hollow({ supports: { style: 'grid', spacing: 12, diameter: 1.2 } }),
+      }),
+    );
+    expect(gridded.status()).toBe('NoError');
+    expect(gridded.volume()).toBeGreaterThan(plain.volume());
+    const box = gridded.boundingBox();
+    expect(box.max[0]).toBeLessThanOrEqual(30.001);
+    plain.delete();
+    gridded.delete();
+  });
+});
+
 describe('support pillar geometry', () => {
   it('adds exactly the pillar volume inside the cavity', async () => {
     const wasm = await getManifold();
@@ -111,7 +133,7 @@ describe('support pillar geometry', () => {
     const issues = validate(
       params({
         shape: { kind: 'round', diameter: 60 },
-        hollow: hollow({ supports: { spacing: 4, diameter: 1 } }),
+        hollow: hollow({ supports: { style: 'pillars', spacing: 4, diameter: 1 } }),
       }),
     );
     expect(issues.map((issue) => issue.code)).toContain('hollow-supports');

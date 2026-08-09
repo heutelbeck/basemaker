@@ -2,17 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { buildBase } from '../src/geometry/buildBase.ts';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
 import { signedArea } from '../src/geometry/outlines.ts';
-import { circleOutline, segmentsFor } from '../src/geometry/tessellation.ts';
+import { circleOutline, segmentsFor } from '../src/params/tessellation.ts';
 import type { BaseParams, MagnetParams } from '../src/params/types.ts';
 import { defaultParams } from '../src/params/types.ts';
 
 function params(overrides: Partial<BaseParams>): BaseParams {
-  return { ...defaultParams(), ...overrides };
+  return { ...defaultParams(), height: 4, edgeSlope: 1.5, ...overrides };
 }
 
 function roundMagnets(overrides: Partial<MagnetParams>): MagnetParams {
   return {
     shape: 'round',
+    layout: 'line',
     diameter: 5,
     length: 5,
     width: 5,

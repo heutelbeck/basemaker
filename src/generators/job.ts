@@ -1,10 +1,21 @@
 import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import type { Shape3D } from 'replicad';
-import { buildBase, buildBaseSingleSolid, buildLetterSolids } from '../geometry/buildBase.ts';
+import { buildBase, buildBaseSingleSolid, buildLetterSolids, buildPlaqueSolidLettered } from '../geometry/buildBase.ts';
 import { ensureFont } from '../geometry/lettering/font.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
+import { analyzeOverhangs } from '../geometry/overhang.ts';
 import { toRawMesh } from '../geometry/mesh.ts';
+import { buildCrystals, buildPlants, buildRock } from '../geometry/buildDecor.ts';
 import { buildAdapterTray, buildMovementTray } from '../geometry/buildTray.ts';
+import type { CrystalParams, PlantParams, RockParams } from '../params/decor.ts';
+import {
+  defaultCrystalParams,
+  defaultPlantParams,
+  defaultRockParams,
+  validateCrystal,
+  validatePlant,
+  validateRock,
+} from '../params/decor.ts';
 import type { AdapterTrayParams, MovementTrayParams } from '../params/trays.ts';
 import {
   defaultAdapterTrayParams,
@@ -26,7 +37,10 @@ import { baseFilenameSlug, shapeSlug } from './filenames.ts';
 export type Job =
   | { generator: 'base'; params: BaseParams }
   | { generator: 'movementTray'; params: MovementTrayParams }
-  | { generator: 'adapterTray'; params: AdapterTrayParams };
+  | { generator: 'adapterTray'; params: AdapterTrayParams }
+  | { generator: 'rock'; params: RockParams }
+  | { generator: 'crystal'; params: CrystalParams }
+  | { generator: 'plants'; params: PlantParams };
 
 export type GeneratorId = Job['generator'];
 
@@ -34,7 +48,13 @@ export const GENERATOR_LABELS: Record<GeneratorId, string> = {
   base: 'Base',
   movementTray: 'Movement tray',
   adapterTray: 'Adapter tray',
+  rock: 'Tactical rock',
+  crystal: 'Crystal cluster',
+  plants: 'Plants',
 };
+
+const ERROR_STEP_MESH_ONLY =
+  'This generator produces organic mesh geometry and has no STEP form; export STL or 3MF instead.';
 
 export function defaultJob(): Job {
   return { generator: 'base', params: defaultParams() };
@@ -48,6 +68,12 @@ export function defaultJobFor(generator: GeneratorId): Job {
       return { generator, params: defaultMovementTrayParams() };
     case 'adapterTray':
       return { generator, params: defaultAdapterTrayParams() };
+    case 'rock':
+      return { generator, params: defaultRockParams() };
+    case 'crystal':
+      return { generator, params: defaultCrystalParams() };
+    case 'plants':
+      return { generator, params: defaultPlantParams() };
   }
 }
 
@@ -59,6 +85,12 @@ export function validateJob(job: Job): ValidationIssue[] {
       return validateMovementTray(job.params);
     case 'adapterTray':
       return validateAdapterTray(job.params);
+    case 'rock':
+      return validateRock(job.params);
+    case 'crystal':
+      return validateCrystal(job.params);
+    case 'plants':
+      return validatePlant(job.params);
   }
 }
 
@@ -73,6 +105,12 @@ export async function buildJobMesh(wasm: ManifoldToplevel, job: Job): Promise<Ma
       return buildMovementTray(wasm, job.params);
     case 'adapterTray':
       return buildAdapterTray(wasm, job.params);
+    case 'rock':
+      return buildRock(wasm, job.params);
+    case 'crystal':
+      return buildCrystals(wasm, job.params);
+    case 'plants':
+      return buildPlants(wasm, job.params);
   }
 }
 
@@ -89,14 +127,40 @@ export interface JobStats {
   sizeX: number;
   sizeY: number;
   sizeZ: number;
+  overhangAreaMm2: number;
 }
 
 export interface JobBundle {
   parts: JobPart[];
   stats: JobStats;
+  overhangOverlay: RawMesh | null;
 }
 
 const BODY_COLOR = '#1A1A1A';
+
+function mergeOverlays(overlays: RawMesh[]): RawMesh | null {
+  if (overlays.length === 0) {
+    return null;
+  }
+  if (overlays.length === 1) {
+    return overlays[0];
+  }
+  const totalPositions = overlays.reduce((acc, m) => acc + m.positions.length, 0);
+  const totalIndices = overlays.reduce((acc, m) => acc + m.indices.length, 0);
+  const positions = new Float32Array(totalPositions);
+  const indices = new Uint32Array(totalIndices);
+  let posOffset = 0;
+  let idxOffset = 0;
+  for (const overlay of overlays) {
+    positions.set(overlay.positions, posOffset);
+    for (let i = 0; i < overlay.indices.length; i++) {
+      indices[idxOffset + i] = overlay.indices[i] + posOffset / 3;
+    }
+    posOffset += overlay.positions.length;
+    idxOffset += overlay.indices.length;
+  }
+  return { positions, indices };
+}
 
 /**
  * Builds all printable parts of a job plus overall statistics. Most jobs
@@ -106,18 +170,35 @@ const BODY_COLOR = '#1A1A1A';
 export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<JobBundle> {
   const solids: { name: string; colorHex: string; solid: Manifold }[] = [];
   try {
-    if (job.generator === 'base' && job.params.lettering !== null) {
-      const font = await ensureFont(job.params.lettering.font);
-      solids.push({
-        name: 'body',
-        colorHex: BODY_COLOR,
-        solid: buildBase(wasm, job.params, font),
-      });
-      solids.push({
-        name: 'lettering',
-        colorHex: job.params.lettering.colorHex,
-        solid: buildLetterSolids(wasm, job.params, font),
-      });
+    if (job.generator === 'base' && (job.params.lettering !== null || job.params.plaque !== null)) {
+      const lettering = job.params.lettering;
+      const font = lettering !== null ? await ensureFont(lettering.font) : null;
+      if (job.params.plaque !== null) {
+        const sideLetters = lettering !== null && lettering.placement === 'side';
+        solids.push({
+          name: 'body',
+          colorHex: BODY_COLOR,
+          solid: buildBase(
+            wasm,
+            { ...job.params, plaque: null, lettering: sideLetters ? null : lettering },
+            sideLetters ? null : font,
+          ),
+        });
+        solids.push({
+          name: 'plaque',
+          colorHex: job.params.plaque.colorHex,
+          solid: buildPlaqueSolidLettered(wasm, job.params, font),
+        });
+      } else {
+        solids.push({ name: 'body', colorHex: BODY_COLOR, solid: buildBase(wasm, job.params, font) });
+      }
+      if (lettering !== null && font !== null) {
+        solids.push({
+          name: 'lettering',
+          colorHex: lettering.colorHex,
+          solid: buildLetterSolids(wasm, job.params, font),
+        });
+      }
     } else {
       solids.push({
         name: 'model',
@@ -131,6 +212,8 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
     const parts: JobPart[] = [];
     let triangles = 0;
     let vertices = 0;
+    let overhangArea = 0;
+    const overlays: RawMesh[] = [];
     for (const entry of solids) {
       volume += entry.solid.volume();
       const box = entry.solid.boundingBox();
@@ -141,6 +224,11 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
       const mesh = toRawMesh(entry.solid);
       triangles += mesh.indices.length / 3;
       vertices += mesh.positions.length / 3;
+      const analysis = analyzeOverhangs(mesh);
+      overhangArea += analysis.overhangAreaMm2;
+      if (analysis.overlay !== null) {
+        overlays.push(analysis.overlay);
+      }
       parts.push({ name: entry.name, colorHex: entry.colorHex, mesh });
     }
     return {
@@ -152,7 +240,9 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
         sizeX: max[0] - min[0],
         sizeY: max[1] - min[1],
         sizeZ: max[2] - min[2],
+        overhangAreaMm2: overhangArea,
       },
+      overhangOverlay: mergeOverlays(overlays),
     };
   } finally {
     for (const entry of solids) {
@@ -168,10 +258,43 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
 export async function buildJobStep(job: Job): Promise<Shape3D> {
   switch (job.generator) {
     case 'base': {
-      const { buildStepShape } = await import('../geometry/step/buildStepShape.ts');
+      const { applyStepLettering, buildStepLetterParts, buildStepShape } = await import(
+        '../geometry/step/buildStepShape.ts'
+      );
       const font =
         job.params.lettering !== null ? await ensureFont(job.params.lettering.font) : null;
-      return buildStepShape(job.params, font);
+      const hasLetters = job.params.lettering !== null && font !== null;
+      const parts: Shape3D[] = [buildStepShape(job.params, font)];
+      let letterReference: Shape3D | null = null;
+      if (job.params.plaque !== null) {
+        const { buildStepPlaque } = await import('../geometry/step/buildStepPlaque.ts');
+        const { baseBottomOutline } = await import('../geometry/buildBase.ts');
+        const plaqueRaw = buildStepPlaque(job.params, baseBottomOutline(job.params));
+        if (plaqueRaw !== null) {
+          if (hasLetters) {
+            const bare = buildStepShape({ ...job.params, lettering: null });
+            letterReference = bare.fuse(plaqueRaw.clone());
+            parts.push(applyStepLettering(plaqueRaw, job.params, font));
+          } else {
+            parts.push(plaqueRaw);
+          }
+        }
+      }
+      if (hasLetters) {
+        const letters = buildStepLetterParts(
+          job.params,
+          font,
+          letterReference,
+        );
+        if (letters !== null) {
+          parts.push(letters);
+        }
+      }
+      if (parts.length > 1) {
+        const { makeCompound } = await import('replicad');
+        return makeCompound(parts) as unknown as Shape3D;
+      }
+      return parts[0];
     }
     case 'movementTray': {
       const { buildStepMovementTray } = await import('../geometry/step/buildStepTray.ts');
@@ -181,6 +304,10 @@ export async function buildJobStep(job: Job): Promise<Shape3D> {
       const { buildStepAdapterTray } = await import('../geometry/step/buildStepTray.ts');
       return buildStepAdapterTray(job.params);
     }
+    case 'rock':
+    case 'crystal':
+    case 'plants':
+      throw new Error(ERROR_STEP_MESH_ONLY);
   }
 }
 
@@ -196,5 +323,11 @@ export function jobFilename(job: Job, extension: string): string {
       const { rows, cols, donor, target } = job.params;
       return `adapter-${cols}x${rows}-${shapeSlug(donor)}-to-${shapeSlug(target)}.${extension}`;
     }
+    case 'rock':
+      return `rock-${job.params.sizeMm}-s${job.params.seed}.${extension}`;
+    case 'crystal':
+      return `crystals-${job.params.count}-s${job.params.seed}.${extension}`;
+    case 'plants':
+      return `${job.params.variety}-${job.params.count}-s${job.params.seed}.${extension}`;
   }
 }

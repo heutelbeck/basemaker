@@ -2,7 +2,7 @@ import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import type { RecessParams } from '../../params/types.ts';
 import type { Track } from '../dispose.ts';
 import { insetOutline } from '../outlines.ts';
-import type { Point2 } from '../tessellation.ts';
+import type { Point2 } from '../../params/tessellation.ts';
 import { CUT_EPSILON } from './shell.ts';
 
 /** Cutter for the recessed top: the top outline inset, cut down from above. */

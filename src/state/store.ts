@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type { Job, JobPart, JobStats } from '../generators/job.ts';
+import type { RawMesh } from '../geometry/mesh.ts';
 import { defaultJob, validateJob } from '../generators/job.ts';
 import type { BaseParams } from '../params/types.ts';
 import type { ValidationIssue } from '../params/validate.ts';
+import { registerLocalFont } from '../geometry/lettering/font.ts';
 import { GeometryClient } from '../worker/workerClient.ts';
 
 export interface AppState {
@@ -10,10 +12,13 @@ export interface AppState {
   issues: ValidationIssue[];
   parts: JobPart[] | null;
   stats: JobStats | null;
+  overhangOverlay: RawMesh | null;
+  showOverhangs: boolean;
   busy: boolean;
   buildError: string | null;
   setJob: (update: (job: Job) => Job) => void;
   replaceJob: (job: Job) => void;
+  toggleOverhangs: () => void;
 }
 
 let client: GeometryClient | null = null;
@@ -25,6 +30,7 @@ function geometryClient(): GeometryClient {
         useAppStore.setState({
           parts: result.parts,
           stats: result.stats,
+          overhangOverlay: result.overhangOverlay,
           busy: false,
           buildError: null,
         });
@@ -50,6 +56,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   issues: [],
   parts: null,
   stats: null,
+  overhangOverlay: null,
+  showOverhangs: false,
   busy: false,
   buildError: null,
   setJob: (update) => {
@@ -57,6 +65,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   replaceJob: (job) => {
     set(applyJob(job));
+  },
+  toggleOverhangs: () => {
+    set({ showOverhangs: !get().showOverhangs });
   },
 }));
 
@@ -106,4 +117,24 @@ export function exportThreeMf(job: Job): Promise<Uint8Array> {
 
 export function exportStep(job: Job): Promise<ArrayBuffer> {
   return geometryClient().exportStep(job);
+}
+
+export function exportThreeMfExploded(job: Job): Promise<Uint8Array> {
+  return geometryClient().exportThreeMfExploded(job);
+}
+
+/**
+ * Registers a system font for lettering in this session: parsed on the
+ * main thread for STEP export and transferred to the geometry worker for
+ * mesh builds, then triggers a rebuild of the current job.
+ */
+export async function registerLetteringFont(family: string, buffer: ArrayBuffer): Promise<void> {
+  registerLocalFont(family, buffer);
+  await geometryClient().registerFont(family, buffer.slice(0));
+  requestRebuild();
+}
+
+/** Rebuilds the current job, e.g. after out-of-band changes like new fonts. */
+export function requestRebuild(): void {
+  geometryClient().requestBuild(useAppStore.getState().job);
 }

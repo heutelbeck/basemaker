@@ -6,9 +6,12 @@ All geometry is computed client-side. The live preview and the STL/3MF exports u
 
 ## Generators
 
-- **Base**: round, oval, GW oval presets, pill, square, rectangle, converter (pocket that accepts another base with true parallel clearance), and freeform footprints drawn in the app (straight polygon, smooth spline, or circles joined by a tangent hull)
+- **Base**: round, oval, GW oval presets, pill, square, rectangle, hex (measured across flats), converter (pocket that accepts another base with true parallel clearance), and freeform footprints drawn in the app (straight polygon, smooth spline, or circles joined by a tangent hull)
 - **Movement tray**: pockets for any base shape with rim and gap; formations: ranked block, Bretonnian lance wedge, loose skirmish (offset rows); rotated pockets for cavalry frontage; sheet inlay recess on the underside (one hidden sheet) or in the pocket floors (pieces directly under the bases)
 - **Adapter tray**: WHFB-to-TOW style conversion trays; the tray occupies exactly the target base grid while each cell pockets a donor base; optional engraved score lines mark where the target base edges line up
+- **Tactical rock**: fractal heightfield outcrops (ridge noise over an irregular footprint) with a flat bottom and a guaranteed level mounting plateau; heightfields cannot overhang, so rocks always print support-free
+- **Crystal cluster**: druse-style clusters that radiate from the center (vertical in the middle, leaning outward toward the edge) so shafts intergrow naturally instead of crossing; tilts stay inside the printable cone
+- **Plants**: support-free grass tufts and reeds that splay radially without crossing, plus smooth revolved toadstools with 40 degree cap undersides; FDM and resin printability profiles (these three generators are mesh-only; STEP export explains why)
 
 ## Base features
 
@@ -18,7 +21,9 @@ All geometry is computed client-side. The live preview and the STL/3MF exports u
 - Recessed top and slotta through-slot (with a surrounding rim wall inside hollow bases; validation blocks slots that would cut into magnet holders)
 - Rim lettering: engraved or embossed text along the rim of round bases, on the top face or the side wall, in three bundled font faces; letters render in their color in the preview and export as a second colored 3MF object for multi-material printers
 - Resolution: chord tolerance slider (0.002 to 0.2 mm) with Draft/High/Ultra presets and a live segment-count readout
+- Surface textures modeled on real groundwork: cobblestone laid as a Lloyd-relaxed Voronoi joint network, running-bond courses, or peacock fans (tight mortar gaps, optional domed sett tops); planks with engraved grain and worn irregular ends; multiple randomly placed irregular ponds with graded shores and raised banks; impact craters with ejecta rims; fine lava crack networks; steel deck plates with rivet rows or anti-slip tread
 - Dimension feedback: the drawing canvas shows technical-drawing bounding-box measurements, and the 3D viewport shows the overall size in mm
+- Overhang check: a viewport toggle highlights downward faces steeper than the 50 degree printable cone in red and reports the unsupported area; multi-part jobs offer an exploded 3MF that lays every part flat on the plate
 
 ## Library and collections
 
@@ -62,3 +67,14 @@ All geometry is computed client-side. The live preview and the STL/3MF exports u
 - replicad: MIT
 - opentype.js: MIT
 - DejaVu Sans Bold (dejavu-fonts-ttf): DejaVu Fonts License (free)
+
+## Deployment (GitHub Pages)
+
+Two workflows live in `.github/workflows/`:
+
+- `ci.yml` lints, tests, builds, and runs the STEP backend smoke on every push and pull request.
+- `pages.yml` builds and deploys `dist/` to GitHub Pages on pushes to `main`. Enable it once under repository Settings > Pages > Source: GitHub Actions.
+
+The site URL is `https://heutelbeck.github.io/basemaker/` (project repositories deploy under `https://<user>.github.io/<repo>/`; only a repository named `<user>.github.io` serves at the root). HTTPS is automatic.
+
+The Google Drive OAuth client id is injected at deploy time, never hard coded: create a repository variable named `DRIVE_CLIENT_ID` (Settings > Secrets and variables > Actions > Variables) holding the OAuth web client id. In the Google Cloud console, the client's authorized JavaScript origins must be `https://heutelbeck.github.io` (origins are scheme and host only, without the `/basemaker` path) plus `http://localhost:5200` for development. No client secret is used anywhere: the browser token flow authenticates with the public client id alone. Without the variable the Drive panel falls back to asking the user for a client id.

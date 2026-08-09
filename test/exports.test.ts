@@ -75,6 +75,17 @@ describe('writeBinaryStl', () => {
 });
 
 describe('writeThreeMf', () => {
+  it('never emits exponent notation coordinates, which 3MF forbids', async () => {
+    const mesh = await defaultMesh();
+    const zipped = writeThreeMf(mesh);
+    const model = new TextDecoder().decode(unzipSync(zipped)['3D/3dmodel.model']);
+    const vertexLines = model.split('\n').filter((line) => line.includes('<vertex'));
+    expect(vertexLines.length).toBeGreaterThan(0);
+    for (const line of vertexLines) {
+      expect(line).not.toMatch(/[0-9]e-?[0-9]/i);
+    }
+  });
+
   it('packs a valid OPC zip with a millimeter model matching the mesh', async () => {
     const mesh = await defaultMesh();
     const zipped = writeThreeMf(mesh);

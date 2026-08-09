@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildBase } from '../src/geometry/buildBase.ts';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
-import { circleOutline } from '../src/geometry/tessellation.ts';
+import { circleOutline } from '../src/params/tessellation.ts';
 import type { BaseParams } from '../src/params/types.ts';
 import { defaultParams } from '../src/params/types.ts';
 
 function params(overrides: Partial<BaseParams>): BaseParams {
-  return { ...defaultParams(), ...overrides };
+  return { ...defaultParams(), height: 4, edgeSlope: 1.5, ...overrides };
 }
 
 function ngonPrismVolume(r: number, n: number, height: number): number {
@@ -78,6 +78,7 @@ describe('buildBase plain shells', () => {
       { kind: 'pill', length: 60, width: 25 },
       { kind: 'square', size: 30 },
       { kind: 'rect', length: 50, width: 25 },
+      { kind: 'hex', size: 25 },
     ];
     for (const shape of shapes) {
       const solid = buildBase(wasm, params({ shape }));
@@ -133,5 +134,18 @@ describe('buildBase hollow shells', () => {
     for (const resource of [hollow, slabProto, ceilingSlab, ceilingRing]) {
       resource.delete();
     }
+  });
+});
+
+describe('hex bases', () => {
+  it('builds a hex base with the exact across-flats width', async () => {
+    const wasm = await getManifold();
+    const hex = buildBase(wasm, params({ shape: { kind: 'hex', size: 25 }, edgeSlope: 0 }));
+    const box = hex.boundingBox();
+    expect(box.max[1] - box.min[1]).toBeCloseTo(25, 6);
+    expect(box.max[0] - box.min[0]).toBeCloseTo((2 * 25) / Math.sqrt(3), 6);
+    const hexArea = (Math.sqrt(3) / 2) * 25 * 25;
+    expect(hex.volume()).toBeCloseTo(hexArea * 4, 4);
+    hex.delete();
   });
 });

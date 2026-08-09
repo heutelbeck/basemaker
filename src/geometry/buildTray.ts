@@ -1,6 +1,5 @@
 import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import { computeEdgeProfile } from '../params/edgeProfile.ts';
-import { convexHull } from '../params/polygon.ts';
 import { halfExtents, resolveShape } from '../params/shapeMetrics.ts';
 import type {
   AdapterTrayParams,
@@ -12,8 +11,8 @@ import { withGeometryScope } from './dispose.ts';
 import type { Track } from './dispose.ts';
 import { CUT_EPSILON, buildShellSolid, shellOutlines } from './features/shell.ts';
 import { insetOutline, outsetOutline } from './outlines.ts';
-import type { Point2 } from './tessellation.ts';
-import { outlineFor, rectOutline } from './tessellation.ts';
+import type { Point2 } from '../params/tessellation.ts';
+import { outlineFor, rectOutline } from '../params/tessellation.ts';
 
 const ERROR_INVALID_TRAY = 'The generated tray is not a valid manifold: ';
 
@@ -34,6 +33,7 @@ interface TrayLayout {
   pocketOutline: Point2[];
   centers: Point2[];
   shellOutline: Point2[];
+  shellPieces: Point2[][] | null;
   pocketDepth: number;
   floor: number;
   edgeSlope: number;
@@ -70,9 +70,10 @@ export function cellCenters(layout: {
 }
 
 /**
- * Formation-aware cell centers. Lance staggers each column back by half a
- * cell per step away from the center column, forming the Bretonnian
- * wedge; skirmish shifts alternate rows by half a pitch.
+ * Formation-aware cell centers. Lance is the official Bretonnian wedge:
+ * rank r holds r + 1 bases, each rank centered, front rank first - `rows`
+ * is the number of ranks, `cols` is ignored. Skirmish shifts alternate
+ * rows by half a pitch.
  */
 export function formationCenters(
   formation: TrayFormation,
@@ -82,13 +83,19 @@ export function formationCenters(
   pitchY: number,
 ): Point2[] {
   const centers: Point2[] = [];
+  if (formation === 'lance') {
+    for (let row = 0; row < rows; row++) {
+      for (let i = 0; i <= row; i++) {
+        centers.push([(i - row / 2) * pitchX, ((rows - 1) / 2 - row) * pitchY]);
+      }
+    }
+    return centers;
+  }
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       let x = (col - (cols - 1) / 2) * pitchX;
-      let y = (row - (rows - 1) / 2) * pitchY;
-      if (formation === 'lance') {
-        y += Math.abs(col - (cols - 1) / 2) * (pitchY / 2);
-      } else if (formation === 'skirmish' && row % 2 === 1) {
+      const y = (row - (rows - 1) / 2) * pitchY;
+      if (formation === 'skirmish' && row % 2 === 1) {
         x += pitchX / 2;
       }
       centers.push([x, y]);
@@ -97,18 +104,44 @@ export function formationCenters(
   return centers;
 }
 
-/** Convex outline hugging all formation cells, before the rim is added. */
-export function formationHull(centers: Point2[], cellHx: number, cellHy: number): Point2[] {
-  const corners: Point2[] = [];
-  for (const [x, y] of centers) {
-    corners.push(
-      [x - cellHx, y - cellHy],
-      [x + cellHx, y - cellHy],
-      [x + cellHx, y + cellHy],
-      [x - cellHx, y + cellHy],
-    );
+/**
+ * One convex rectangle per rank, hugging that rank's cells plus the rim.
+ * Real stepped trays (GW, LITKO) follow the staggered ranks exactly; a
+ * convex hull would bridge the steps with diagonals and ruin base-to-base
+ * contact, so the tray body is the union of these per-rank frustums.
+ */
+export function rankRects(
+  centers: Point2[],
+  cellHx: number,
+  cellHy: number,
+  rim: number,
+): Point2[][] {
+  const byRow = new Map<number, Point2[]>();
+  for (const center of centers) {
+    const key = Math.round(center[1] * 1000);
+    const row = byRow.get(key);
+    if (row === undefined) {
+      byRow.set(key, [center]);
+    } else {
+      row.push(center);
+    }
   }
-  return convexHull(corners);
+  const rects: Point2[][] = [];
+  for (const row of byRow.values()) {
+    const xs = row.map(([x]) => x);
+    const y = row[0][1];
+    const minX = Math.min(...xs) - cellHx - rim;
+    const maxX = Math.max(...xs) + cellHx + rim;
+    const minY = y - cellHy - rim;
+    const maxY = y + cellHy + rim;
+    rects.push([
+      [minX, minY],
+      [maxX, minY],
+      [maxX, maxY],
+      [minX, maxY],
+    ]);
+  }
+  return rects;
 }
 
 export function buildMovementTray(wasm: ManifoldToplevel, params: MovementTrayParams): Manifold {
@@ -129,22 +162,20 @@ export function buildMovementTray(wasm: ManifoldToplevel, params: MovementTrayPa
   const pitchX = 2 * phx + params.gap;
   const pitchY = 2 * phy + params.gap;
   const centers = formationCenters(params.formation, params.rows, params.cols, pitchX, pitchY);
+  const stepped = params.formation !== 'grid';
+  const pieces = stepped ? rankRects(centers, phx, phy, params.rim) : null;
   const shellOutline =
-    params.formation === 'grid'
+    pieces === null
       ? rectOutline(
           (params.cols * pitchX - params.gap) / 2 + params.rim,
           (params.rows * pitchY - params.gap) / 2 + params.rim,
         )
-      : (outsetOutline(
-          wasm,
-          formationHull(centers, phx + params.gap / 2, phy + params.gap / 2),
-          params.rim,
-          tol,
-        ));
+      : mergedOutline(wasm, pieces);
   return buildTray(wasm, {
     pocketOutline,
     centers,
     shellOutline,
+    shellPieces: pieces,
     pocketDepth: params.pocketDepth,
     floor: params.floor,
     edgeSlope: params.edgeSlope,
@@ -172,6 +203,7 @@ export function buildAdapterTray(wasm: ManifoldToplevel, params: AdapterTrayPara
     pocketOutline,
     centers: cellCenters({ rows: params.rows, cols: params.cols, pitchX, pitchY }),
     shellOutline: rectOutline(spanX / 2, spanY / 2),
+    shellPieces: null,
     pocketDepth: params.pocketDepth,
     floor: params.floor,
     edgeSlope: params.edgeSlope,
@@ -182,12 +214,42 @@ export function buildAdapterTray(wasm: ManifoldToplevel, params: AdapterTrayPara
   });
 }
 
+/** Single outer contour of the union of the rank rectangles. */
+function mergedOutline(wasm: ManifoldToplevel, pieces: Point2[][]): Point2[] {
+  const section = wasm.CrossSection.ofPolygons(pieces, 'Positive');
+  const contours = section.toPolygons() as Point2[][];
+  section.delete();
+  let best = contours[0];
+  let bestArea = 0;
+  for (const contour of contours) {
+    let area = 0;
+    for (let i = 0; i < contour.length; i++) {
+      const [x1, y1] = contour[i];
+      const [x2, y2] = contour[(i + 1) % contour.length];
+      area += x1 * y2 - x2 * y1;
+    }
+    if (Math.abs(area) > bestArea) {
+      bestArea = Math.abs(area);
+      best = contour;
+    }
+  }
+  return best;
+}
+
 function buildTray(wasm: ManifoldToplevel, layout: TrayLayout): Manifold {
   return withGeometryScope((track) => {
     const height = layout.floor + layout.pocketDepth;
     const profile = computeEdgeProfile(height, layout.edgeSlope, 0, 0.02);
-    const outlines = shellOutlines(wasm, layout.shellOutline, profile);
-    const shell = buildShellSolid(wasm, track, outlines, profile);
+    const shell =
+      layout.shellPieces === null
+        ? buildShellSolid(wasm, track, shellOutlines(wasm, layout.shellOutline, profile), profile)
+        : track(
+            wasm.Manifold.union(
+              layout.shellPieces.map((piece) =>
+                buildShellSolid(wasm, track, shellOutlines(wasm, piece, profile), profile),
+              ),
+            ),
+          );
     const cutters = pocketCutters(wasm, track, layout, height);
     if (layout.sheetInlay !== null) {
       if (layout.sheetInlay.placement === 'pockets') {

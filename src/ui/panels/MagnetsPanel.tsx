@@ -6,6 +6,7 @@ import { Section } from './Section.tsx';
 
 const DEFAULT_MAGNETS: MagnetParams = {
   shape: 'round',
+  layout: 'even',
   diameter: 5,
   length: 5,
   width: 5,
@@ -45,6 +46,16 @@ export function MagnetsPanel() {
               { value: 'rect', label: 'Rectangular' },
             ]}
             onChange={(shape) => update({ shape: shape as MagnetParams['shape'] })}
+          />
+          <Select
+            label="Layout"
+            value={magnets.layout}
+            options={[
+              { value: 'line', label: 'In a line' },
+              { value: 'grid', label: 'Grid across the base' },
+              { value: 'even', label: 'Equal areas (relaxed)' },
+            ]}
+            onChange={(layout) => update({ layout: layout as MagnetParams['layout'] })}
           />
           {magnets.shape === 'round' ? (
             <NumberField
@@ -102,31 +113,41 @@ export function MagnetsPanel() {
               step={1}
               onChange={(count) => update({ count: Math.max(1, Math.round(count)) })}
             />
-            <NumberField
-              label="Spacing"
-              unit="mm"
-              value={magnets.spacing}
-              min={1}
-              step={1}
-              onChange={(spacing) => update({ spacing })}
-            />
+            {magnets.layout === 'line' && (
+              <NumberField
+                label="Spacing"
+                unit="mm"
+                value={magnets.spacing}
+                min={1}
+                step={1}
+                onChange={(spacing) => update({ spacing })}
+              />
+            )}
           </div>
-          <div className="field-row">
-            <NumberField
-              label="Offset X"
-              unit="mm"
-              value={magnets.offsetX}
-              step={0.5}
-              onChange={(offsetX) => update({ offsetX })}
-            />
-            <NumberField
-              label="Offset Y"
-              unit="mm"
-              value={magnets.offsetY}
-              step={0.5}
-              onChange={(offsetY) => update({ offsetY })}
-            />
-          </div>
+          {magnets.layout === 'line' && (
+            <div className="field-row">
+              <NumberField
+                label="Offset X"
+                unit="mm"
+                value={magnets.offsetX}
+                step={0.5}
+                onChange={(offsetX) => update({ offsetX })}
+              />
+              <NumberField
+                label="Offset Y"
+                unit="mm"
+                value={magnets.offsetY}
+                step={0.5}
+                onChange={(offsetY) => update({ offsetY })}
+              />
+            </div>
+          )}
+          {magnets.layout !== 'line' && (
+            <p className="freeform-hint">
+              Grid spreads the magnets over the footprint; equal areas relaxes
+              them so each magnet anchors the same share of the base.
+            </p>
+          )}
         </>
       )}
     </Section>

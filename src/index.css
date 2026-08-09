@@ -427,3 +427,64 @@ input[type='range'] {
   color: var(--error);
   font-size: 12px;
 }
+
+.overhang-toggle {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(16, 18, 22, 0.8);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.overhang-toggle input {
+  accent-color: var(--error);
+}
+
+.overhang-toggle em {
+  font-style: normal;
+  color: var(--error);
+}
+
+.export-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-dim, #9aa1ac);
+}
+
+.export-progress-track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(128, 138, 152, 0.25);
+}
+
+.export-progress-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  border-radius: 2px;
+  background: var(--accent, #e8833a);
+  animation: export-progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes export-progress-slide {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}

@@ -4,7 +4,7 @@ import { profileInsetAt } from '../../params/edgeProfile.ts';
 import type { HollowParams } from '../../params/types.ts';
 import type { Track } from '../dispose.ts';
 import { insetOutline } from '../outlines.ts';
-import type { Point2 } from '../tessellation.ts';
+import type { Point2 } from '../../params/tessellation.ts';
 
 /** Overshoot for cutters so no cutter face is exactly coplanar with the solid. */
 export const CUT_EPSILON = 0.01;
@@ -69,6 +69,23 @@ export function buildShellSolid(
  * height plus the wall thickness. Below the ceiling the outer wall only
  * gets wider, so the remaining wall is at least `wall` mm everywhere.
  */
+/** Cavity outline inset by an extra clearance, for support structures. */
+export function hollowInnerOutline(
+  wasm: ManifoldToplevel,
+  outlines: ShellOutlines,
+  profile: EdgeProfile,
+  hollow: HollowParams,
+  clearance: number,
+): Point2[] {
+  const ceilingHeight = profile.height - hollow.topThickness;
+  const insetAtCeiling = profileInsetAt(profile, ceilingHeight);
+  return insetOutline(
+    wasm,
+    outlines.bottom,
+    insetAtCeiling + hollow.wall + clearance,
+  );
+}
+
 export function buildHollowCavity(
   wasm: ManifoldToplevel,
   track: Track,

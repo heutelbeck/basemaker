@@ -1,8 +1,8 @@
 import type { Manifold, ManifoldToplevel } from 'manifold-3d';
+import type { Vec } from '../../params/polygon.ts';
 import type { MagnetParams } from '../../params/types.ts';
-import { magnetPositions } from '../../params/validate.ts';
 import type { Track } from '../dispose.ts';
-import { segmentsFor } from '../tessellation.ts';
+import { segmentsFor } from '../../params/tessellation.ts';
 import { CUT_EPSILON } from './shell.ts';
 
 /**
@@ -13,9 +13,10 @@ export function magnetSlotCutters(
   wasm: ManifoldToplevel,
   track: Track,
   magnets: MagnetParams,
+  centers: Vec[],
   tolMm: number,
 ): Manifold[] {
-  return placements(magnets).map(([x, y]) => {
+  return centers.map(([x, y]) => {
     const slot =
       magnets.shape === 'round'
         ? track(
@@ -46,10 +47,11 @@ export function magnetHousings(
   wasm: ManifoldToplevel,
   track: Track,
   magnets: MagnetParams,
+  centers: Vec[],
   height: number,
   tolMm: number,
 ): Manifold {
-  const pillars = placements(magnets).map(([x, y]) => {
+  const pillars = centers.map(([x, y]) => {
     let pillar: Manifold;
     if (magnets.shape === 'round') {
       const radius = magnets.diameter / 2 + magnets.padding;
@@ -70,9 +72,3 @@ export function magnetHousings(
   return track(wasm.Manifold.union(pillars));
 }
 
-function placements(magnets: MagnetParams): [number, number][] {
-  return magnetPositions(magnets.count, magnets.spacing, magnets.offsetX).map((x) => [
-    x,
-    magnets.offsetY,
-  ]);
-}

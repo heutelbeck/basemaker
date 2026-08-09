@@ -48,11 +48,56 @@ function migrate(entry: StoredEntry): SavedBase {
       migrated.job.params.formation ??= 'grid';
     }
   }
+  if (migrated.job.generator === 'rock') {
+    const rock = migrated.job.params as {
+      heightMm?: number;
+      heightFraction?: number;
+      jaggedness?: number;
+      sizeMm: number;
+    };
+    rock.heightMm ??= rock.sizeMm * (rock.heightFraction ?? 0.75) * 0.55;
+    rock.jaggedness ??= 0.35;
+  }
+  if (migrated.job.generator === 'crystal') {
+    migrated.job.params.padRadiusMm ??=
+      migrated.job.params.spreadMm + migrated.job.params.radiusMm + 1.5;
+  }
+  if (migrated.job.generator === 'plants') {
+    migrated.job.params.padRadiusMm ??= migrated.job.params.spreadMm + 1.5;
+  }
   if (migrated.job.generator === 'base') {
     migrated.job.params.lipRadius ??= 0;
+    if (migrated.job.params.magnets !== null) {
+      migrated.job.params.magnets.layout ??= 'line';
+    }
     migrated.job.params.lettering ??= null;
+    migrated.job.params.plaque ??= null;
+    if (migrated.job.params.plaque !== null) {
+      migrated.job.params.plaque.rivetHeightMm ??= 0.2;
+      migrated.job.params.plaque.colorHex ??= '#9AA5B1';
+      migrated.job.params.plaque.thicknessMm ??=
+        migrated.job.params.plaque.style === 'plate' ? 0.7 : 0.5;
+    }
+    migrated.job.params.surface ??= null;
+    const surface = migrated.job.params.surface;
+    if (surface !== null) {
+      if (surface.type === 'cobblestone') {
+        surface.domed ??= false;
+      } else if (surface.type === 'planks') {
+        surface.grain ??= true;
+      } else if (surface.type === 'pond') {
+        surface.count ??= 1;
+        surface.roughness ??= 0.35;
+        surface.shoreGradient ??= true;
+      } else if (surface.type === 'steelPlates') {
+        surface.detailHeight ??= 0.35;
+      }
+    }
     if (migrated.job.params.hollow !== null) {
       migrated.job.params.hollow.supports ??= null;
+      if (migrated.job.params.hollow.supports !== null) {
+        migrated.job.params.hollow.supports.style ??= 'pillars';
+      }
     }
     if (migrated.job.params.lettering !== null) {
       migrated.job.params.lettering.style ??= 'engraved';

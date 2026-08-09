@@ -5,6 +5,7 @@ const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+  <Default Extension="config" ContentType="text/xml"/>
 </Types>
 `;
 
@@ -26,12 +27,24 @@ function normalizeColor(colorHex: string): string {
   return `#${padded}FF`;
 }
 
+/**
+ * 3MF requires plain decimal numbers; JavaScript stringifies tiny floats
+ * in exponent notation, which strict parsers reject, so coordinates are
+ * emitted with fixed precision and trimmed.
+ */
+function coord(value: number): string {
+  if (Math.abs(value) < 5e-5) {
+    return '0';
+  }
+  return value.toFixed(4).replace(/\.?0+$/, '');
+}
+
 function appendMeshXml(parts: string[], mesh: RawMesh): void {
   const { positions, indices } = mesh;
   parts.push('   <mesh>\n    <vertices>\n');
   for (let v = 0; v < positions.length; v += 3) {
     parts.push(
-      `     <vertex x="${positions[v]}" y="${positions[v + 1]}" z="${positions[v + 2]}"/>\n`,
+      `     <vertex x="${coord(positions[v])}" y="${coord(positions[v + 1])}" z="${coord(positions[v + 2])}"/>\n`,
     );
   }
   parts.push('    </vertices>\n    <triangles>\n');
@@ -44,10 +57,10 @@ function appendMeshXml(parts: string[], mesh: RawMesh): void {
 }
 
 /**
- * Serializes one or more named, colored parts as a minimal 3MF package with
- * explicit millimeter units. Multi-material slicers show each part as its
- * own object with the declared display color, so a base body and its rim
- * lettering can be assigned different filaments.
+ * Serializes one or more named, colored parts as a minimal 3MF package
+ * with explicit millimeter units. The parts are components of a single
+ * assembly object with one build item, so slicers load them as one model
+ * whose parts keep their alignment and can each be assigned a filament.
  */
 export function writeThreeMfParts(modelParts: ThreeMfPart[]): Uint8Array {
   const parts: string[] = [];
@@ -69,16 +82,51 @@ export function writeThreeMfParts(modelParts: ThreeMfPart[]): Uint8Array {
     appendMeshXml(parts, part.mesh);
     parts.push('  </object>\n');
   });
+  const assemblyId = modelParts.length + 2;
+  if (modelParts.length > 1) {
+    parts.push(`  <object id="${assemblyId}" name="assembly" type="model">\n   <components>\n`);
+    modelParts.forEach((_, index) => {
+      parts.push(`    <component objectid="${index + 2}"/>\n`);
+    });
+    parts.push('   </components>\n  </object>\n');
+  }
   parts.push(' </resources>\n <build>\n');
-  modelParts.forEach((_, index) => {
-    parts.push(`  <item objectid="${index + 2}"/>\n`);
-  });
+  parts.push(`  <item objectid="${modelParts.length > 1 ? assemblyId : 2}"/>\n`);
   parts.push(' </build>\n</model>\n');
-  return zipSync({
+  const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(CONTENT_TYPES),
     '_rels/.rels': strToU8(RELS),
     '3D/3dmodel.model': strToU8(parts.join('')),
+  };
+  if (modelParts.length > 1) {
+    files['Metadata/model_settings.config'] = strToU8(modelSettings(modelParts, assemblyId));
+  }
+  return zipSync(files);
+}
+
+/**
+ * Bambu Studio and Orca Slicer ignore core-spec basematerials; they map
+ * parts to filament slots through this proprietary Metadata file, keyed
+ * by the component object ids of the assembly. Extruder slots are
+ * assigned 1-based in part order (body, plaque, lettering).
+ */
+function modelSettings(modelParts: ThreeMfPart[], assemblyId: number): string {
+  const lines: string[] = [
+    '<?xml version="1.0" encoding="UTF-8"?>\n',
+    '<config>\n',
+    `  <object id="${assemblyId}">\n`,
+    '    <metadata key="name" value="model"/>\n',
+  ];
+  modelParts.forEach((part, index) => {
+    lines.push(
+      `    <part id="${index + 2}" subtype="normal_part">\n`,
+      `      <metadata key="name" value="${part.name}"/>\n`,
+      `      <metadata key="extruder" value="${index + 1}"/>\n`,
+      '    </part>\n',
+    );
   });
+  lines.push('  </object>\n', '</config>\n');
+  return lines.join('');
 }
 
 /** Single-object convenience wrapper. */

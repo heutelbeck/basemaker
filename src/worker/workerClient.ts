@@ -1,4 +1,4 @@
-import { wrap } from 'comlink';
+import { transfer, wrap } from 'comlink';
 import type { Remote } from 'comlink';
 import type { Job } from '../generators/job.ts';
 import type { BuildOutput, GeometryWorkerApi } from './geometryWorker.ts';
@@ -39,6 +39,10 @@ export class GeometryClient {
     }, DEBOUNCE_MS);
   }
 
+  registerFont(family: string, buffer: ArrayBuffer): Promise<void> {
+    return this.api.registerFont(family, transfer(buffer, [buffer]));
+  }
+
   exportStl(job: Job): Promise<ArrayBuffer> {
     return this.api.exportStl(job);
   }
@@ -49,6 +53,10 @@ export class GeometryClient {
 
   exportStep(job: Job): Promise<ArrayBuffer> {
     return this.api.exportStep(job);
+  }
+
+  exportThreeMfExploded(job: Job): Promise<Uint8Array> {
+    return this.api.exportThreeMfExploded(job);
   }
 
   private launchIfIdle(): void {

@@ -6,7 +6,7 @@ import type { BaseParams } from '../src/params/types.ts';
 import { defaultParams } from '../src/params/types.ts';
 
 function params(overrides: Partial<BaseParams>): BaseParams {
-  return { ...defaultParams(), ...overrides };
+  return { ...defaultParams(), height: 4, edgeSlope: 1.5, ...overrides };
 }
 
 describe('edge profile math', () => {

@@ -1,4 +1,4 @@
-import type { ResolvedShape } from '../params/shapeMetrics.ts';
+import type { ResolvedShape } from './shapeMetrics.ts';
 
 export type Point2 = [number, number];
 
@@ -104,6 +104,17 @@ export function stadiumOutline(flank: number, r: number, tolMm: number): Point2[
   return points;
 }
 
+/** CCW flat-fronted regular hexagon, measured across the flats. */
+export function hexOutline(acrossFlats: number): Point2[] {
+  const circumradius = acrossFlats / Math.sqrt(3);
+  const points: Point2[] = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i;
+    points.push([circumradius * Math.cos(angle), circumradius * Math.sin(angle)]);
+  }
+  return points;
+}
+
 /** CCW rectangle outline centered on the origin. */
 export function rectOutline(hx: number, hy: number): Point2[] {
   return [
@@ -125,5 +136,7 @@ export function outlineFor(shape: ResolvedShape, tolMm: number): Point2[] {
       return stadiumOutline(shape.flank, shape.r, tolMm);
     case 'rect':
       return rectOutline(shape.hx, shape.hy);
+    case 'hex':
+      return hexOutline(shape.acrossFlats);
   }
 }
