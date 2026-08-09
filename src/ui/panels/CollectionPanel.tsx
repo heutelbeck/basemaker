@@ -9,6 +9,7 @@ import {
 import {
   DriveCollectionStorage,
   storeDriveClientId,
+  hasBuiltInDriveClientId,
   storedDriveClientId,
 } from '../../state/driveStorage.ts';
 import { useAppStore } from '../../state/store.ts';
@@ -124,22 +125,27 @@ export function CollectionPanel() {
       />
       {backend === 'drive' && !driveConnected && (
         <div className="drive-setup">
-          <label className="field">
-            <span className="field-label">Google OAuth client id</span>
-            <input
-              type="text"
-              placeholder="1234-abc.apps.googleusercontent.com"
-              value={driveClientId}
-              onChange={(event) => setDriveClientId(event.target.value)}
-            />
-          </label>
+          {!hasBuiltInDriveClientId() && (
+            <label className="field">
+              <span className="field-label">Google OAuth client id</span>
+              <input
+                type="text"
+                placeholder="1234-abc.apps.googleusercontent.com"
+                value={driveClientId}
+                onChange={(event) => setDriveClientId(event.target.value)}
+              />
+            </label>
+          )}
           <button type="button" onClick={connectDrive} disabled={driveClientId.trim() === ''}>
-            Connect Google Drive
+            Sign in with Google
           </button>
           <p className="freeform-hint">
-            Create an OAuth client id (type Web application) in the Google Cloud console with the
-            Drive API enabled, add this site as an authorized JavaScript origin, and paste the id
-            here. Collections are stored in the app data folder of your Drive.
+            {hasBuiltInDriveClientId()
+              ? 'Sign in with Google to keep your collection in the app data folder of your Drive.'
+              : 'Create an OAuth client id (type Web application) in the Google Cloud console ' +
+                'with the Drive API enabled, add this site as an authorized JavaScript origin, ' +
+                'and paste the id here. Collections are stored in the app data folder of your ' +
+                'Drive.'}
           </p>
         </div>
       )}

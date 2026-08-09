@@ -51,6 +51,11 @@ export function storedDriveClientId(): string {
   return stored !== null && stored !== '' ? stored : BUILT_IN_CLIENT_ID;
 }
 
+/** True when the deployment ships its own OAuth client id. */
+export function hasBuiltInDriveClientId(): boolean {
+  return BUILT_IN_CLIENT_ID !== '';
+}
+
 export function storeDriveClientId(clientId: string): void {
   localStorage.setItem(CLIENT_ID_KEY, clientId.trim());
 }
