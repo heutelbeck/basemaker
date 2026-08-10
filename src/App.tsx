@@ -5,6 +5,8 @@ import { PreviewCanvas } from './preview/PreviewCanvas.tsx';
 import { bootstrapGeometry, useAppStore } from './state/store.ts';
 import { Select } from './ui/controls/Select.tsx';
 import { CrystalPanel, PlantsPanel, RockPanel } from './ui/panels/DecorPanels.tsx';
+import { RulerPanel } from './ui/panels/RulerPanel.tsx';
+import { TemplatePanel } from './ui/panels/TemplatePanel.tsx';
 import { AdapterTrayPanel, MovementTrayPanel } from './ui/panels/TrayPanels.tsx';
 import { BodyPanel } from './ui/panels/BodyPanel.tsx';
 import { CollectionPanel } from './ui/panels/CollectionPanel.tsx';
@@ -66,6 +68,8 @@ export function App() {
         <RockPanel />
         <CrystalPanel />
         <PlantsPanel />
+        <RulerPanel />
+        <TemplatePanel />
         <ExportPanel />
         <LibraryPanel />
         <CollectionPanel />

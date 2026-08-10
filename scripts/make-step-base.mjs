@@ -175,6 +175,17 @@ if (process.argv[2] === '--smoke') {
   }
   const trayCases = [
     ['movement-tray', buildStepMovementTray({ ...defaultMovementTrayParams(), rows: 2 })],
+    [
+      'skeleton-tray',
+      buildStepMovementTray({
+        ...defaultMovementTrayParams(),
+        pocketShape: { kind: 'round', diameter: 32 },
+        style: 'skeleton',
+        gap: 1,
+        rim: 2,
+        rows: 2,
+      }),
+    ],
     ['adapter-tray', buildStepAdapterTray(defaultAdapterTrayParams())],
     [
       'round-movement-tray',

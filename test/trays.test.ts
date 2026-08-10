@@ -14,7 +14,7 @@ function movementTray(overrides: Partial<MovementTrayParams>): MovementTrayParam
 }
 
 function adapterTray(overrides: Partial<AdapterTrayParams>): AdapterTrayParams {
-  return { ...defaultAdapterTrayParams(), ...overrides };
+  return { ...defaultAdapterTrayParams(), edgeSlope: 0, ...overrides };
 }
 
 describe('cellCenters', () => {
@@ -79,6 +79,84 @@ describe('movement tray', () => {
       movementTray({ sheetInlay: { depth: 1.5, inset: 2, placement: 'underside' }, floor: 1.2 }),
     );
     expect(issues.map((issue) => issue.code)).toContain('tray-inlay-depth');
+  });
+});
+
+describe('tray styles', () => {
+  it('skeleton trays are floorless connected rings', async () => {
+    const wasm = await getManifold();
+    const tray = buildMovementTray(
+      wasm,
+      movementTray({
+        pocketShape: { kind: 'round', diameter: 32 },
+        style: 'skeleton',
+        rows: 1,
+        cols: 5,
+        gap: 1,
+        rim: 2,
+        edgeSlope: 0,
+      }),
+    );
+    expect(tray.status()).toBe('NoError');
+    expect(tray.genus()).toBe(5);
+    const solid = buildMovementTray(
+      wasm,
+      movementTray({
+        pocketShape: { kind: 'round', diameter: 32 },
+        rows: 1,
+        cols: 5,
+        gap: 1,
+        rim: 2,
+        edgeSlope: 0,
+      }),
+    );
+    expect(tray.volume()).toBeLessThan(solid.volume());
+    tray.delete();
+    solid.delete();
+  });
+
+  it('honeycomb trays keep a lipped floor perforated by a hex web', async () => {
+    const wasm = await getManifold();
+    const web = buildMovementTray(
+      wasm,
+      movementTray({
+        pocketShape: { kind: 'round', diameter: 32 },
+        style: 'honeycomb',
+        rows: 1,
+        cols: 3,
+        gap: 1,
+        rim: 2,
+        edgeSlope: 0,
+      }),
+    );
+    const solid = buildMovementTray(
+      wasm,
+      movementTray({
+        pocketShape: { kind: 'round', diameter: 32 },
+        rows: 1,
+        cols: 3,
+        gap: 1,
+        rim: 2,
+        edgeSlope: 0,
+      }),
+    );
+    expect(web.status()).toBe('NoError');
+    expect(web.genus()).toBeGreaterThan(10);
+    expect(web.volume()).toBeLessThan(solid.volume() * 0.8);
+    web.delete();
+    solid.delete();
+  });
+
+  it('rejects disconnected rings and inlays on web trays', () => {
+    const wide = movementTray({ style: 'honeycomb', gap: 8, rim: 2 });
+    expect(validateMovementTray(wide).map((issue) => issue.code)).toContain('tray-web-gap');
+    const inlaid = movementTray({
+      style: 'honeycomb',
+      gap: 1,
+      rim: 2,
+      sheetInlay: { depth: 0.6, inset: 2, placement: 'underside' },
+    });
+    expect(validateMovementTray(inlaid).map((issue) => issue.code)).toContain('tray-web-inlay');
   });
 });
 

@@ -168,6 +168,18 @@ export const GW_OVAL_SIZES: Record<GwOvalPreset, { length: number; width: number
   '170x105': { length: 170, width: 105 },
 };
 
+/**
+ * Side slope per unit height measured from an original WHFB/TOW infantry
+ * base (1.3 mm slope over 3.4 mm height), so trays of any height can
+ * default to the same lean angle as the bases they carry.
+ */
+export const TOW_SLOPE_RATIO = 1.3 / 3.4;
+
+/** The TOW lean angle extrapolated to a body of the given height. */
+export function towEdgeSlopeFor(height: number): number {
+  return Number((height * TOW_SLOPE_RATIO).toFixed(2));
+}
+
 export function defaultParams(): BaseParams {
   return {
     shape: { kind: 'round', diameter: 32 },

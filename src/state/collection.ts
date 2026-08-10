@@ -46,6 +46,13 @@ function migrate(entry: StoredEntry): SavedBase {
     if (migrated.job.generator === 'movementTray') {
       migrated.job.params.pocketRotated ??= false;
       migrated.job.params.formation ??= 'grid';
+      migrated.job.params.style ??= 'solid';
+      migrated.job.params.webCellMm ??= 4;
+      migrated.job.params.webStrutMm ??= 1.2;
+      migrated.job.params.accent ??= null;
+      if (migrated.job.params.accent !== null) {
+        migrated.job.params.accent.placement ??= 'bottom';
+      }
     }
   }
   if (migrated.job.generator === 'rock') {
@@ -57,6 +64,11 @@ function migrate(entry: StoredEntry): SavedBase {
     };
     rock.heightMm ??= rock.sizeMm * (rock.heightFraction ?? 0.75) * 0.55;
     rock.jaggedness ??= 0.35;
+  }
+  if (migrated.job.generator === 'ruler') {
+    migrated.job.params.pivotsPerJoint ??= 1;
+    migrated.job.params.splitEveryUnits ??= 0;
+    migrated.job.params.rotateNumbers ??= true;
   }
   if (migrated.job.generator === 'crystal') {
     migrated.job.params.padRadiusMm ??=

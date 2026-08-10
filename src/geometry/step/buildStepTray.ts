@@ -37,6 +37,9 @@ function grownPocketDrawing(
   return rotated ? drawing.rotate(90) : drawing;
 }
 
+const ERROR_STEP_HONEYCOMB =
+  'Honeycomb trays are mesh-only; export STL or 3MF, or switch the tray style.';
+
 export function buildStepMovementTray(params: MovementTrayParams): Shape3D {
   const pocket = resolveShape(params.pocketShape);
   const extents = halfExtents(pocket);
@@ -45,6 +48,28 @@ export function buildStepMovementTray(params: MovementTrayParams): Shape3D {
   const pitchX = 2 * phx + params.gap;
   const pitchY = 2 * phy + params.gap;
   const centers = formationCenters(params.formation, params.rows, params.cols, pitchX, pitchY);
+  if (params.style === 'honeycomb') {
+    throw new Error(ERROR_STEP_HONEYCOMB);
+  }
+  if (params.style === 'skeleton') {
+    const height = params.floor + params.pocketDepth;
+    const ring = grownPocketDrawing(pocket, params.clearance + params.rim, params.pocketRotated);
+    const silhouette = centers
+      .map(([x, y]) => ring.translate(x, y))
+      .reduce((merged, piece) => merged.fuse(piece));
+    let tray = asShape3D(silhouette.sketchOnPlane('XY').extrude(height));
+    const pocketDrawing = grownPocketDrawing(pocket, params.clearance, params.pocketRotated);
+    for (const [x, y] of centers) {
+      const hole = asShape3D(
+        pocketDrawing
+          .translate(x, y)
+          .sketchOnPlane('XY', -CUT_EPSILON)
+          .extrude(height + 2 * CUT_EPSILON),
+      );
+      tray = asShape3D(tray.cut(hole));
+    }
+    return tray;
+  }
   let trayDrawing: Drawing;
   let bodyPieces: Drawing[] | null = null;
   if (params.formation === 'grid') {

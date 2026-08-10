@@ -19,6 +19,12 @@ export interface ThreeMfPart {
   name: string;
   colorHex: string;
   mesh: RawMesh;
+  /**
+   * Parts sharing a group load as one rigid object in the slicer; parts
+   * in different groups are independent objects the user can reposition,
+   * e.g. the glued pieces of a split ruler.
+   */
+  group?: string;
 }
 
 function normalizeColor(colorHex: string): string {
@@ -82,16 +88,39 @@ export function writeThreeMfParts(modelParts: ThreeMfPart[]): Uint8Array {
     appendMeshXml(parts, part.mesh);
     parts.push('  </object>\n');
   });
-  const assemblyId = modelParts.length + 2;
-  if (modelParts.length > 1) {
-    parts.push(`  <object id="${assemblyId}" name="assembly" type="model">\n   <components>\n`);
-    modelParts.forEach((_, index) => {
-      parts.push(`    <component objectid="${index + 2}"/>\n`);
-    });
+  const groups = new Map<string, number[]>();
+  modelParts.forEach((part, index) => {
+    const key = part.group ?? 'model';
+    const members = groups.get(key);
+    if (members === undefined) {
+      groups.set(key, [index + 2]);
+    } else {
+      members.push(index + 2);
+    }
+  });
+  let nextId = modelParts.length + 2;
+  const items: number[] = [];
+  const assemblies: { id: number; name: string; members: number[] }[] = [];
+  for (const [name, members] of groups) {
+    if (members.length === 1) {
+      items.push(members[0]);
+    } else {
+      assemblies.push({ id: nextId, name, members });
+      items.push(nextId);
+      nextId++;
+    }
+  }
+  for (const assembly of assemblies) {
+    parts.push(`  <object id="${assembly.id}" name="${assembly.name}" type="model">\n   <components>\n`);
+    for (const member of assembly.members) {
+      parts.push(`    <component objectid="${member}"/>\n`);
+    }
     parts.push('   </components>\n  </object>\n');
   }
   parts.push(' </resources>\n <build>\n');
-  parts.push(`  <item objectid="${modelParts.length > 1 ? assemblyId : 2}"/>\n`);
+  for (const item of items) {
+    parts.push(`  <item objectid="${item}"/>\n`);
+  }
   parts.push(' </build>\n</model>\n');
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(CONTENT_TYPES),
@@ -99,7 +128,7 @@ export function writeThreeMfParts(modelParts: ThreeMfPart[]): Uint8Array {
     '3D/3dmodel.model': strToU8(parts.join('')),
   };
   if (modelParts.length > 1) {
-    files['Metadata/model_settings.config'] = strToU8(modelSettings(modelParts, assemblyId));
+    files['Metadata/model_settings.config'] = strToU8(modelSettings(modelParts, groups, modelParts.length + 2));
   }
   return zipSync(files);
 }
@@ -110,22 +139,40 @@ export function writeThreeMfParts(modelParts: ThreeMfPart[]): Uint8Array {
  * by the component object ids of the assembly. Extruder slots are
  * assigned 1-based in part order (body, plaque, lettering).
  */
-function modelSettings(modelParts: ThreeMfPart[], assemblyId: number): string {
+function modelSettings(
+  modelParts: ThreeMfPart[],
+  groups: Map<string, number[]>,
+  firstAssemblyId: number,
+): string {
+  const slots = new Map<string, number>();
+  for (const part of modelParts) {
+    if (!slots.has(part.colorHex)) {
+      slots.set(part.colorHex, slots.size + 1);
+    }
+  }
   const lines: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>\n',
     '<config>\n',
-    `  <object id="${assemblyId}">\n`,
-    '    <metadata key="name" value="model"/>\n',
   ];
-  modelParts.forEach((part, index) => {
-    lines.push(
-      `    <part id="${index + 2}" subtype="normal_part">\n`,
-      `      <metadata key="name" value="${part.name}"/>\n`,
-      `      <metadata key="extruder" value="${index + 1}"/>\n`,
-      '    </part>\n',
-    );
-  });
-  lines.push('  </object>\n', '</config>\n');
+  let nextId = firstAssemblyId;
+  for (const [name, members] of groups) {
+    const objectId = members.length === 1 ? members[0] : nextId;
+    if (members.length > 1) {
+      nextId++;
+    }
+    lines.push(`  <object id="${objectId}">\n`, `    <metadata key="name" value="${name}"/>\n`);
+    for (const member of members) {
+      const part = modelParts[member - 2];
+      lines.push(
+        `    <part id="${member}" subtype="normal_part">\n`,
+        `      <metadata key="name" value="${part.name}"/>\n`,
+        `      <metadata key="extruder" value="${slots.get(part.colorHex) ?? 1}"/>\n`,
+        '    </part>\n',
+      );
+    }
+    lines.push('  </object>\n');
+  }
+  lines.push('</config>\n');
   return lines.join('');
 }
 

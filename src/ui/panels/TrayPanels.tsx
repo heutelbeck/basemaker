@@ -2,6 +2,7 @@ import type {
   AdapterTrayParams,
   MovementTrayParams,
   SheetInlayParams,
+  TrayAccent,
 } from '../../params/trays.ts';
 import { useAppStore } from '../../state/store.ts';
 import { NumberField } from '../controls/NumberField.tsx';
@@ -182,6 +183,122 @@ export function MovementTrayPanel() {
         />
       </Section>
       <Section title="Tray">
+        <Select
+          label="Tray style"
+          value={params.style}
+          options={[
+            { value: 'solid', label: 'Solid with pockets' },
+            { value: 'skeleton', label: 'Skeleton rings (floorless)' },
+            { value: 'honeycomb', label: 'Honeycomb web' },
+          ]}
+          onChange={(style) =>
+            update({
+              style: style as MovementTrayParams['style'],
+              rim: style === 'solid' ? 3 : 2,
+              gap: style === 'skeleton' ? 6 : 0,
+              pocketDepth: style === 'honeycomb' ? 0.6 : 2.5,
+            })
+          }
+        />
+        {params.style === 'honeycomb' && (
+          <div className="field-row">
+            <NumberField
+              label="Cell"
+              unit="mm"
+              value={params.webCellMm}
+              min={2}
+              step={0.5}
+              onChange={(webCellMm) => update({ webCellMm })}
+            />
+            <NumberField
+              label="Strut"
+              unit="mm"
+              value={params.webStrutMm}
+              min={0.8}
+              step={0.1}
+              onChange={(webStrutMm) => update({ webStrutMm })}
+            />
+          </div>
+        )}
+        {params.style !== 'solid' && (
+          <p className="freeform-hint">
+            Skeleton trays are stepped ring sockets joined by flat bridges: bases rest on an inner
+            ledge over an open ring. Honeycomb trays are one shared basin with a hex mesh floor
+            and a low rim lip. Edge slope and sheet inlays apply to solid trays only.
+          </p>
+        )}
+        <Section
+          title="Accent bottom layer"
+          enabled={params.accent !== null}
+          onToggle={(enabled) =>
+            update({
+              accent: enabled
+                ? { colorHex: '#39d353', layerMm: 0.6, outsetMm: 0.8, placement: 'top' }
+                : null,
+            })
+          }
+        >
+          {params.accent !== null && (
+            <>
+              <Select
+                label="Placement"
+                value={params.accent.placement}
+                options={[
+                  { value: 'top', label: 'Top layer' },
+                  { value: 'bottom', label: 'Bottom layer' },
+                  { value: 'both', label: 'Top and bottom' },
+                ]}
+                onChange={(placement) =>
+                  update({
+                    accent: {
+                      ...(params.accent as TrayAccent),
+                      placement: placement as TrayAccent['placement'],
+                    },
+                  })
+                }
+              />
+              <div className="field-row">
+                <NumberField
+                  label="Layer"
+                  unit="mm"
+                  value={params.accent.layerMm}
+                  min={0.2}
+                  step={0.2}
+                  onChange={(layerMm) =>
+                    update({ accent: { ...(params.accent as TrayAccent), layerMm } })
+                  }
+                />
+                <NumberField
+                  label="Outset"
+                  unit="mm"
+                  value={params.accent.outsetMm}
+                  min={0}
+                  max={3}
+                  step={0.2}
+                  onChange={(outsetMm) =>
+                    update({ accent: { ...(params.accent as TrayAccent), outsetMm } })
+                  }
+                />
+              </div>
+              <label className="field">
+                <span className="field-label">Accent color (3MF export)</span>
+                <input
+                  type="color"
+                  value={params.accent.colorHex}
+                  onChange={(event) =>
+                    update({
+                      accent: { ...(params.accent as TrayAccent), colorHex: event.target.value },
+                    })
+                  }
+                />
+              </label>
+              <p className="freeform-hint">
+                A layer in a second color, slightly larger than the tray, showing as a contour
+                band around the silhouette and inside every opening. 3MF and STL only.
+              </p>
+            </>
+          )}
+        </Section>
         <Select
           label="Formation"
           value={params.formation}

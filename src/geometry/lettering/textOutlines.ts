@@ -194,3 +194,33 @@ export function glyphVerticalCenter(layouts: GlyphLayout[]): number {
   }
   return min === Infinity ? 0 : (min + max) / 2;
 }
+
+/**
+ * Straight-line glyph layout: contours per glyph, positioned along x with
+ * natural advances, the whole text centered on the origin with the
+ * baseline at y = 0. Used for labels that are not wrapped on an arc.
+ */
+export function textLineContourGroups(
+  font: Font,
+  text: string,
+  sizeMm: number,
+): GlyphContour[][] {
+  const fontSize = sizeMm / CAP_HEIGHT_RATIO;
+  const scale = fontSize / font.unitsPerEm;
+  const glyphs = [...text].map((char) => font.charToGlyph(char));
+  const advances = glyphs.map((glyph) => (glyph.advanceWidth ?? 0) * scale);
+  const totalWidth = advances.reduce((acc, advance) => acc + advance, 0);
+  let cursor = -totalWidth / 2;
+  const groups: GlyphContour[][] = [];
+  for (let i = 0; i < text.length; i++) {
+    const originX = cursor;
+    cursor += advances[i];
+    groups.push(
+      markHoles(flattenGlyph(font, text[i], fontSize)).map((contour) => ({
+        points: contour.points.map(([gx, gy]): Point2 => [gx + originX, gy]),
+        isHole: contour.isHole,
+      })),
+    );
+  }
+  return groups;
+}

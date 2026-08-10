@@ -6,7 +6,7 @@ import type { RawMesh } from '../geometry/mesh.ts';
 import { analyzeOverhangs } from '../geometry/overhang.ts';
 import { toRawMesh } from '../geometry/mesh.ts';
 import { buildCrystals, buildPlants, buildRock } from '../geometry/buildDecor.ts';
-import { buildAdapterTray, buildMovementTray } from '../geometry/buildTray.ts';
+import { buildAdapterTray, buildMovementTray, buildMovementTrayParts } from '../geometry/buildTray.ts';
 import type { CrystalParams, PlantParams, RockParams } from '../params/decor.ts';
 import {
   defaultCrystalParams,
@@ -23,6 +23,10 @@ import {
   validateAdapterTray,
   validateMovementTray,
 } from '../params/trays.ts';
+import type { TemplateParams } from '../params/template.ts';
+import { defaultTemplateParams, validateTemplate } from '../params/template.ts';
+import type { RulerParams } from '../params/ruler.ts';
+import { defaultRulerParams, validateRuler } from '../params/ruler.ts';
 import type { BaseParams } from '../params/types.ts';
 import { defaultParams } from '../params/types.ts';
 import type { ValidationIssue } from '../params/validate.ts';
@@ -40,7 +44,9 @@ export type Job =
   | { generator: 'adapterTray'; params: AdapterTrayParams }
   | { generator: 'rock'; params: RockParams }
   | { generator: 'crystal'; params: CrystalParams }
-  | { generator: 'plants'; params: PlantParams };
+  | { generator: 'plants'; params: PlantParams }
+  | { generator: 'ruler'; params: RulerParams }
+  | { generator: 'template'; params: TemplateParams };
 
 export type GeneratorId = Job['generator'];
 
@@ -51,6 +57,8 @@ export const GENERATOR_LABELS: Record<GeneratorId, string> = {
   rock: 'Tactical rock',
   crystal: 'Crystal cluster',
   plants: 'Plants',
+  ruler: 'Measuring ruler',
+  template: 'Area template',
 };
 
 const ERROR_STEP_MESH_ONLY =
@@ -74,6 +82,10 @@ export function defaultJobFor(generator: GeneratorId): Job {
       return { generator, params: defaultCrystalParams() };
     case 'plants':
       return { generator, params: defaultPlantParams() };
+    case 'ruler':
+      return { generator, params: defaultRulerParams() };
+    case 'template':
+      return { generator, params: defaultTemplateParams() };
   }
 }
 
@@ -91,6 +103,10 @@ export function validateJob(job: Job): ValidationIssue[] {
       return validateCrystal(job.params);
     case 'plants':
       return validatePlant(job.params);
+    case 'ruler':
+      return validateRuler(job.params);
+    case 'template':
+      return validateTemplate(job.params);
   }
 }
 
@@ -101,8 +117,19 @@ export async function buildJobMesh(wasm: ManifoldToplevel, job: Job): Promise<Ma
         job.params.lettering !== null ? await ensureFont(job.params.lettering.font) : null;
       return buildBaseSingleSolid(wasm, job.params, font);
     }
-    case 'movementTray':
-      return buildMovementTray(wasm, job.params);
+    case 'movementTray': {
+      if (job.params.accent === null) {
+        return buildMovementTray(wasm, job.params);
+      }
+      const { body, accent } = buildMovementTrayParts(wasm, job.params);
+      if (accent === null) {
+        return body;
+      }
+      const merged = body.add(accent);
+      body.delete();
+      accent.delete();
+      return merged;
+    }
     case 'adapterTray':
       return buildAdapterTray(wasm, job.params);
     case 'rock':
@@ -111,6 +138,27 @@ export async function buildJobMesh(wasm: ManifoldToplevel, job: Job): Promise<Ma
       return buildCrystals(wasm, job.params);
     case 'plants':
       return buildPlants(wasm, job.params);
+    case 'ruler': {
+      const { buildRulerParts } = await import('../geometry/buildRuler.ts');
+      const font = await ensureFont(job.params.font);
+      const parts = buildRulerParts(wasm, job.params, font);
+      const solids = parts.map((part) => part.solid);
+      const merged = wasm.Manifold.union(solids);
+      for (const solid of solids) {
+        solid.delete();
+      }
+      return merged;
+    }
+    case 'template': {
+      const { buildTemplateParts } = await import('../geometry/buildTemplate.ts');
+      const parts = buildTemplateParts(wasm, job.params);
+      const solids = parts.map((part) => part.solid);
+      const merged = wasm.Manifold.union(solids);
+      for (const solid of solids) {
+        solid.delete();
+      }
+      return merged;
+    }
   }
 }
 
@@ -118,6 +166,7 @@ export interface JobPart {
   name: string;
   colorHex: string;
   mesh: RawMesh;
+  group?: string;
 }
 
 export interface JobStats {
@@ -168,7 +217,7 @@ function mergeOverlays(overlays: RawMesh[]): RawMesh | null {
  * letter solids so slicers and the preview can color them separately.
  */
 export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<JobBundle> {
-  const solids: { name: string; colorHex: string; solid: Manifold }[] = [];
+  const solids: { name: string; colorHex: string; solid: Manifold; group?: string }[] = [];
   try {
     if (job.generator === 'base' && (job.params.lettering !== null || job.params.plaque !== null)) {
       const lettering = job.params.lettering;
@@ -198,6 +247,32 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
           colorHex: lettering.colorHex,
           solid: buildLetterSolids(wasm, job.params, font),
         });
+      }
+    } else if (job.generator === 'ruler') {
+      const { buildRulerParts } = await import('../geometry/buildRuler.ts');
+      const font = await ensureFont(job.params.font);
+      for (const part of buildRulerParts(wasm, job.params, font)) {
+        solids.push({
+          name: part.name,
+          colorHex: part.accent ? job.params.accentColorHex : BODY_COLOR,
+          solid: part.solid,
+          group: part.group,
+        });
+      }
+    } else if (job.generator === 'template') {
+      const { buildTemplateParts } = await import('../geometry/buildTemplate.ts');
+      for (const part of buildTemplateParts(wasm, job.params)) {
+        solids.push({
+          name: part.name,
+          colorHex: part.accent ? job.params.accentColorHex : BODY_COLOR,
+          solid: part.solid,
+        });
+      }
+    } else if (job.generator === 'movementTray' && job.params.accent !== null) {
+      const { body, accent } = buildMovementTrayParts(wasm, job.params);
+      solids.push({ name: 'tray', colorHex: BODY_COLOR, solid: body });
+      if (accent !== null) {
+        solids.push({ name: 'accent', colorHex: job.params.accent.colorHex, solid: accent });
       }
     } else {
       solids.push({
@@ -229,7 +304,7 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
       if (analysis.overlay !== null) {
         overlays.push(analysis.overlay);
       }
-      parts.push({ name: entry.name, colorHex: entry.colorHex, mesh });
+      parts.push({ name: entry.name, colorHex: entry.colorHex, mesh, group: entry.group });
     }
     return {
       parts,
@@ -307,6 +382,8 @@ export async function buildJobStep(job: Job): Promise<Shape3D> {
     case 'rock':
     case 'crystal':
     case 'plants':
+    case 'ruler':
+    case 'template':
       throw new Error(ERROR_STEP_MESH_ONLY);
   }
 }
@@ -329,5 +406,13 @@ export function jobFilename(job: Job, extension: string): string {
       return `crystals-${job.params.count}-s${job.params.seed}.${extension}`;
     case 'plants':
       return `${job.params.variety}-${job.params.count}-s${job.params.seed}.${extension}`;
+    case 'ruler':
+      return job.params.variant === 'stick'
+        ? `ruler-${job.params.units}x${job.params.unitLengthMm}.${extension}`
+        : `ruler-chain-${job.params.units}x${job.params.unitLengthMm}.${extension}`;
+    case 'template':
+      return job.params.variant === 'round'
+        ? `template-blast-${job.params.diameterMm}.${extension}`
+        : `template-flame-${job.params.lengthMm}x${job.params.widthMm}.${extension}`;
   }
 }
