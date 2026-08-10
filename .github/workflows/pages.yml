@@ -30,6 +30,7 @@ jobs:
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
           VITE_DRIVE_CLIENT_ID: ${{ vars.DRIVE_CLIENT_ID }}
+          VITE_GOATCOUNTER_URL: ${{ vars.GOATCOUNTER_URL }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

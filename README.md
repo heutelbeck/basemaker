@@ -84,6 +84,10 @@ The OAuth client id is injected at deploy time, never hard coded:
 
 Without the variable, the Drive panel falls back to asking the user for a client id, so self-hosted deployments keep working.
 
+### Analytics (optional)
+
+Page views can be counted with [GoatCounter](https://www.goatcounter.com/) (cookie-free, no consent banner needed). Create a GoatCounter site and put its count endpoint (for example `https://mysite.goatcounter.com/count`) in a repository variable named `GOATCOUNTER_URL`. The endpoint is injected at build time; without the variable no analytics script is loaded at all.
+
 ## License
 
 Basemaker is MIT licensed (see `LICENSE`). All bundled libraries are compatible: MIT and Apache-2.0 dependencies impose only attribution, and the LGPL-2.1 OpenCascade kernel is used unmodified as a dynamically loaded WASM module, which satisfies its relinking requirement.
