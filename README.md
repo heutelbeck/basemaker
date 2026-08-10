@@ -2,6 +2,8 @@
 
 Browser-based parametric generator for tabletop miniature bases, movement trays, and basing decorations, with smooth, print-ready output.
 
+**Live app: [heutelbeck.github.io/basemaker](https://heutelbeck.github.io/basemaker/)**
+
 All geometry is computed client-side. The live preview and the STL/3MF exports use the Manifold kernel (WASM) with chord-tolerance-driven tessellation, so curved sides have no visible facets. The STEP export uses the OCCT kernel (via replicad) and carries true analytic curves; slicers like Bambu Studio, OrcaSlicer, and PrusaSlicer tessellate it at import with their own precision.
 
 ## Generators
