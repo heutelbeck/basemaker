@@ -25,15 +25,15 @@ const DOVETAIL_DEPTH = 3.8;
 const DOVETAIL_CLEARANCE = 0.05;
 const DOVETAIL_TIP_RELIEF = 0.1;
 /**
- * Press-fit snap rivet. The shaft fills the hole up to a 0.2 mm diametral
- * running fit; the slit cap flexes inward, snaps through the hole with
- * 0.5 mm diametral interference, and its 0.25 mm ledge locks under the
- * top counterbore while leaving 0.1 mm axial float for free rotation.
- * The slit stops well above the shaft base, so the root stays a solid
- * full circle reinforced by a small fillet.
+ * Press-fit snap rivet. The shaft fills the hole up to a 0.15 mm
+ * diametral running fit; the slit cap flexes inward, snaps through the
+ * hole with 0.55 mm diametral interference, and its ledge locks under
+ * the top counterbore while leaving 0.1 mm axial float for free
+ * rotation. The slit stops well above the shaft base, so the root stays
+ * a solid full circle reinforced by a small fillet.
  */
 const PIN_RADIUS = 2.5;
-const RIVET_RUN_CLEARANCE = 0.1;
+const RIVET_RUN_CLEARANCE = 0.075;
 const RIVET_CAP_RADIUS = 2.85;
 const RIVET_CAP_TIP_RADIUS = 2.3;
 const RIVET_CAP_HEIGHT = 1;
