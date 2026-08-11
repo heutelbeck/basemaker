@@ -170,11 +170,11 @@ if (process.argv[2] === '--smoke') {
       {
         ...defaultParams(),
         shape: { kind: 'round', diameter: 40 },
-        height: 4.8,
-        edgeSlope: 0,
-        lipRadius: 4.8,
-        recess: { depth: 0.5, inset: 1.2 },
-        hollow: { wall: 1.1, topThickness: 1.2, supports: null },
+        height: 4.5,
+        edgeSlope: 0.05,
+        lipRadius: 4.85,
+        recess: { depth: 0.5, inset: 0.9 },
+        hollow: { wall: 1.1, topThickness: 2, supports: null },
       },
     ],
     [

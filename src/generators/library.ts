@@ -86,21 +86,41 @@ function plainOvalBase(length: number, width: number): Job {
 
 // Warmachine MK IV plays on exactly five round sizes: 30, 40, 50, 80,
 // and 120 mm; the 80 mm extra large is new in MK IV, the others go back
-// to MK I. Privateer Press publishes no profile drawings; production
-// bases show a side wall that is one continuous quarter circle from the
-// bottom rim to the recessed top plate, so the lip radius equals the
-// full height.
+// to MK I. Privateer Press publishes no profile drawings; these numbers
+// come from fitting circles to official STLs. Each side wall is a single
+// arc larger than the height, truncated at the recessed top plate; the
+// arc radius and its bottom lean vary slightly per size. The 80 mm file
+// was only available with print supports, so its values interpolate the
+// 50 and 120 mm fits.
+interface LippedSpec {
+  height: number;
+  edgeSlope: number;
+  lipRadius: number;
+  recessInset: number;
+  recessDepth: number;
+}
+
+const WARMACHINE_SPECS: Record<number, LippedSpec> = {
+  30: { height: 4.45, edgeSlope: 0, lipRadius: 4.75, recessInset: 0.15, recessDepth: 0.43 },
+  40: { height: 4.5, edgeSlope: 0.05, lipRadius: 4.85, recessInset: 0.9, recessDepth: 0.5 },
+  50: { height: 4.5, edgeSlope: 0.28, lipRadius: 4.88, recessInset: 0.9, recessDepth: 0.5 },
+  80: { height: 4.5, edgeSlope: 0.2, lipRadius: 4.85, recessInset: 1, recessDepth: 0.5 },
+  120: { height: 4.5, edgeSlope: 0.13, lipRadius: 4.71, recessInset: 1.05, recessDepth: 0.5 },
+};
+
 function lippedRoundBase(diameter: number): Job {
+  const spec = WARMACHINE_SPECS[diameter];
   return {
     generator: 'base',
     params: {
       ...defaultParams(),
       shape: { kind: 'round', diameter },
-      height: 4.8,
-      edgeSlope: 0,
-      lipRadius: 4.8,
-      recess: { depth: 0.5, inset: 1.2 },
-      hollow: diameter >= 40 ? { wall: 1.1, topThickness: 1.2, supports: null } : null,
+      height: spec.height,
+      edgeSlope: spec.edgeSlope,
+      lipRadius: spec.lipRadius,
+      recess: { depth: spec.recessDepth, inset: spec.recessInset },
+      hollow: { wall: 1.1, topThickness: 2, supports: null },
+      quality: { chordTolMm: 0.005 },
     },
   };
 }

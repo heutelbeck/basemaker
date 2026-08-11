@@ -8,7 +8,7 @@ import { hexOutline } from '../../params/tessellation.ts';
 import type { Vec } from '../../params/polygon.ts';
 import type { ResolvedShape } from '../../params/shapeMetrics.ts';
 import { resolveShape } from '../../params/shapeMetrics.ts';
-import { topInsetFor } from '../../params/edgeProfile.ts';
+import { profileInsetAt, topInsetFor } from '../../params/edgeProfile.ts';
 import { supportPillarCenters } from '../../params/supports.ts';
 import type { BaseParams, MagnetParams } from '../../params/types.ts';
 import { SLOTTA_RIM } from '../../params/types.ts';
@@ -34,18 +34,44 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
   const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius);
   const top = topInset > 0 ? bottom.offset(-topInset) : bottom;
 
-  const bottomSketch = bottom.sketchOnPlane('XY') as Sketch;
-  let solid = asShape3D(
-    params.edgeSlope > 0
-      ? bottomSketch.loftWith(loftTop.sketchOnPlane('XY', params.height) as Sketch, { ruled: true })
-      : bottomSketch.extrude(params.height),
-  );
-  if (params.lipRadius > 0) {
-    // A fillet equal to the wall height makes OCCT fail; clamping one
-    // micron below keeps a full-height quarter-round lip buildable with
-    // no measurable deviation.
-    const filletRadius = Math.min(params.lipRadius, params.height - 0.001);
-    solid = asShape3D(solid.fillet(filletRadius, (edge) => edge.inPlane('XY', params.height)));
+  let solid: Shape3D;
+  if (params.lipRadius > params.height && outerSpec.kind === 'round') {
+    // Truncated arc side: one circle spans the whole wall, so the body is
+    // a revolve of the exact profile with the arc as a true curve.
+    const radius = outerSpec.diameter / 2;
+    const profile = {
+      height: params.height,
+      edgeSlope: params.edgeSlope,
+      lipRadius: params.lipRadius,
+      topInset,
+      samples: [],
+    };
+    const midInset = profileInsetAt(profile, params.height / 2);
+    const section = draw([0, 0])
+      .lineTo([radius, 0])
+      .threePointsArcTo(
+        [radius - topInset, params.height],
+        [radius - midInset, params.height / 2],
+      )
+      .lineTo([0, params.height])
+      .close();
+    solid = asShape3D((section.sketchOnPlane('XZ') as Sketch).revolve());
+  } else {
+    const bottomSketch = bottom.sketchOnPlane('XY') as Sketch;
+    solid = asShape3D(
+      params.edgeSlope > 0
+        ? bottomSketch.loftWith(loftTop.sketchOnPlane('XY', params.height) as Sketch, {
+            ruled: true,
+          })
+        : bottomSketch.extrude(params.height),
+    );
+    if (params.lipRadius > 0) {
+      // A fillet equal to the wall height makes OCCT fail; clamping one
+      // micron below keeps a full-height quarter-round lip buildable with
+      // no measurable deviation.
+      const filletRadius = Math.min(params.lipRadius, params.height - 0.001);
+      solid = asShape3D(solid.fillet(filletRadius, (edge) => edge.inPlane('XY', params.height)));
+    }
   }
   const needsHousings =
     params.hollow !== null && (params.magnets !== null || params.slotta !== null);

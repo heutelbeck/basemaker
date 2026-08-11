@@ -1,4 +1,4 @@
-import { topInsetFor } from './edgeProfile.ts';
+import { lipArcReachesTop, topInsetFor } from './edgeProfile.ts';
 import { magnetCenters } from './magnetLayout.ts';
 import { validateSurface } from './surface.ts';
 import { freeformOutline } from './freeform.ts';
@@ -46,7 +46,9 @@ const ERROR_HOLLOW_VALUES_POSITIVE =
 const ERROR_HOLLOW_WALL_TOO_THICK =
   'The edge slope plus the hollow wall thickness must be smaller than half the smallest footprint dimension.';
 const ERROR_LIP_RADIUS_INVALID =
-  'The lip radius must not be negative and must not exceed the base height; a lip radius equal to the height makes the whole side a quarter circle.';
+  'The lip radius must not be negative, and a lip arc larger than the base height must still reach the top face; reduce the lip radius or the edge slope.';
+const ERROR_LIP_TRUNCATED_REQUIRES_ROUND =
+  'A lip radius larger than the base height makes the whole side one truncated arc, which is only supported on plain round bases.';
 const ERROR_HOLLOW_SUPPORTS_INVALID =
   'Support pillars need a diameter of 1.5 mm to 8 mm, grid ribs a thickness of 0.8 mm to 8 mm, with spacing of at least the size plus 4 mm.';
 const ERROR_LETTERING_DEPTH_INVALID =
@@ -235,8 +237,13 @@ export function validate(params: BaseParams): ValidationIssue[] {
   } else if (topInset >= rIn) {
     issues.push({ code: 'edge-slope-large', message: ERROR_EDGE_SLOPE_TOO_LARGE });
   }
-  if (params.lipRadius < 0 || params.lipRadius > params.height) {
+  if (
+    params.lipRadius < 0 ||
+    !lipArcReachesTop(params.height, params.edgeSlope, params.lipRadius)
+  ) {
     issues.push({ code: 'lip-radius', message: ERROR_LIP_RADIUS_INVALID });
+  } else if (params.lipRadius > params.height && params.shape.kind !== 'round') {
+    issues.push({ code: 'lip-radius', message: ERROR_LIP_TRUNCATED_REQUIRES_ROUND });
   }
 
   const { hollow, magnets, recess, slotta } = params;
