@@ -46,7 +46,7 @@ const ERROR_HOLLOW_VALUES_POSITIVE =
 const ERROR_HOLLOW_WALL_TOO_THICK =
   'The edge slope plus the hollow wall thickness must be smaller than half the smallest footprint dimension.';
 const ERROR_LIP_RADIUS_INVALID =
-  'The lip radius must not be negative and must be smaller than the base height.';
+  'The lip radius must not be negative and must not exceed the base height; a lip radius equal to the height makes the whole side a quarter circle.';
 const ERROR_HOLLOW_SUPPORTS_INVALID =
   'Support pillars need a diameter of 1.5 mm to 8 mm, grid ribs a thickness of 0.8 mm to 8 mm, with spacing of at least the size plus 4 mm.';
 const ERROR_LETTERING_DEPTH_INVALID =
@@ -235,7 +235,7 @@ export function validate(params: BaseParams): ValidationIssue[] {
   } else if (topInset >= rIn) {
     issues.push({ code: 'edge-slope-large', message: ERROR_EDGE_SLOPE_TOO_LARGE });
   }
-  if (params.lipRadius < 0 || params.lipRadius >= params.height) {
+  if (params.lipRadius < 0 || params.lipRadius > params.height) {
     issues.push({ code: 'lip-radius', message: ERROR_LIP_RADIUS_INVALID });
   }
 

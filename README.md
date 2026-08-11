@@ -39,7 +39,7 @@ The decoration generators share an organic base pad with a configurable radius, 
 
 ## Library and collections
 
-- Game library with standard sizes and trays for Warhammer 40k, Age of Sigmar, The Old World, and legacy Warhammer Fantasy, including lance trays of 3/6/10/15 knights
+- Game library with standard sizes and trays for Warhammer 40k, Age of Sigmar, The Old World, legacy Warhammer Fantasy (including lance trays of 3/6/10/15 knights), and Warmachine & Hordes (the five official round sizes as lipped bases with a recessed top)
 - Collection manager: save, load, rename, delete named designs; JSON export/import; saved designs migrate automatically across app versions
 - Storage backends: browser localStorage (default) or the user's own Google Drive app data folder
 

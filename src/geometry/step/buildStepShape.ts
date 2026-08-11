@@ -41,7 +41,11 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
       : bottomSketch.extrude(params.height),
   );
   if (params.lipRadius > 0) {
-    solid = asShape3D(solid.fillet(params.lipRadius, (edge) => edge.inPlane('XY', params.height)));
+    // A fillet equal to the wall height makes OCCT fail; clamping one
+    // micron below keeps a full-height quarter-round lip buildable with
+    // no measurable deviation.
+    const filletRadius = Math.min(params.lipRadius, params.height - 0.001);
+    solid = asShape3D(solid.fillet(filletRadius, (edge) => edge.inPlane('XY', params.height)));
   }
   const needsHousings =
     params.hollow !== null && (params.magnets !== null || params.slotta !== null);

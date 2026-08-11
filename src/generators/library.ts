@@ -4,7 +4,11 @@ import { defaultParams } from '../params/types.ts';
 import type { Job } from './job.ts';
 
 export type GameSystem =
-  'Warhammer 40k' | 'Age of Sigmar' | 'The Old World' | 'Warhammer Fantasy (legacy)';
+  | 'Warhammer 40k'
+  | 'Age of Sigmar'
+  | 'The Old World'
+  | 'Warhammer Fantasy (legacy)'
+  | 'Warmachine & Hordes';
 
 export interface LibraryEntry {
   system: GameSystem;
@@ -76,6 +80,27 @@ function plainOvalBase(length: number, width: number): Job {
       height: 3.4,
       edgeSlope: 1.3,
       hollow: { wall: 1.1, topThickness: 1, supports: null },
+    },
+  };
+}
+
+// Warmachine MK IV plays on exactly five round sizes: 30, 40, 50, 80,
+// and 120 mm; the 80 mm extra large is new in MK IV, the others go back
+// to MK I. Privateer Press publishes no profile drawings; production
+// bases show a side wall that is one continuous quarter circle from the
+// bottom rim to the recessed top plate, so the lip radius equals the
+// full height.
+function lippedRoundBase(diameter: number): Job {
+  return {
+    generator: 'base',
+    params: {
+      ...defaultParams(),
+      shape: { kind: 'round', diameter },
+      height: 4.8,
+      edgeSlope: 0,
+      lipRadius: 4.8,
+      recess: { depth: 0.5, inset: 1.2 },
+      hollow: diameter >= 40 ? { wall: 1.1, topThickness: 1.2, supports: null } : null,
     },
   };
 }
@@ -356,6 +381,11 @@ export const GAME_LIBRARY: LibraryEntry[] = [
     name: 'Bretonnian lance of 10 (4 ranks) 25x50 mm',
     job: lanceTray({ kind: 'rect', length: 50, width: 25 }, 4),
   },
+  { system: 'Warmachine & Hordes', name: 'Small 30 mm', job: lippedRoundBase(30) },
+  { system: 'Warmachine & Hordes', name: 'Medium 40 mm', job: lippedRoundBase(40) },
+  { system: 'Warmachine & Hordes', name: 'Large 50 mm', job: lippedRoundBase(50) },
+  { system: 'Warmachine & Hordes', name: 'Extra large 80 mm (MK IV)', job: lippedRoundBase(80) },
+  { system: 'Warmachine & Hordes', name: 'Huge 120 mm', job: lippedRoundBase(120) },
 ];
 
 export const GAME_SYSTEMS: GameSystem[] = [
@@ -363,6 +393,7 @@ export const GAME_SYSTEMS: GameSystem[] = [
   'Age of Sigmar',
   'The Old World',
   'Warhammer Fantasy (legacy)',
+  'Warmachine & Hordes',
 ];
 
 export function libraryFor(system: GameSystem): LibraryEntry[] {

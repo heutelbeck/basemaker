@@ -166,6 +166,18 @@ if (process.argv[2] === '--smoke') {
       },
     ],
     [
+      'warmachine-lipped',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 40 },
+        height: 4.8,
+        edgeSlope: 0,
+        lipRadius: 4.8,
+        recess: { depth: 0.5, inset: 1.2 },
+        hollow: { wall: 1.1, topThickness: 1.2, supports: null },
+      },
+    ],
+    [
       'plated-front-back',
       {
         ...defaultParams(),
