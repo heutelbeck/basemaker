@@ -78,7 +78,7 @@ const ERROR_PLAQUE_TEXT_INVALID =
 const ERROR_PLAQUE_TEXT_REQUIRES_ROUND = 'Plaque text is only supported on round bases.';
 const ERROR_PLAQUE_VALUES_INVALID =
   'The plaque width and height must be positive, the thickness between 0.2 and 2 mm, and the rivet height between 0 and 0.6 mm.';
-const ERROR_QUALITY_OUT_OF_RANGE = 'The chord tolerance must be between 0.002 mm and 0.5 mm.';
+const ERROR_QUALITY_OUT_OF_RANGE = 'The chord tolerance must be between 0.001 mm and 0.5 mm.';
 const ERROR_RECESS_INSET_TOO_LARGE =
   'The recess inset must be smaller than half the smallest footprint dimension.';
 const ERROR_RECESS_TOO_DEEP = 'The recess depth must leave material below the recess floor.';
@@ -484,7 +484,7 @@ export function validate(params: BaseParams): ValidationIssue[] {
     );
   }
 
-  if (!(params.quality.chordTolMm >= 0.002) || !(params.quality.chordTolMm <= 0.5)) {
+  if (!(params.quality.chordTolMm >= 0.001) || !(params.quality.chordTolMm <= 0.5)) {
     issues.push({ code: 'quality', message: ERROR_QUALITY_OUT_OF_RANGE });
   }
 

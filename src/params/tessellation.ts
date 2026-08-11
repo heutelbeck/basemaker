@@ -3,7 +3,7 @@ import type { ResolvedShape } from './shapeMetrics.ts';
 export type Point2 = [number, number];
 
 export const MIN_SEGMENTS = 16;
-export const MAX_SEGMENTS = 512;
+export const MAX_SEGMENTS = 1024;
 
 /**
  * Number of segments for a full circle of radius `r` such that the sagitta

@@ -34,7 +34,7 @@ The decoration generators share an organic base pad with a configurable radius, 
 - **STL**: single fused solid (embedded letters engraved, raised letters and plaques included)
 - **3MF**: one assembly object whose parts (body, plaque, lettering) are pre-assigned to filament slots 1 to 3 via Bambu/Orca compatible metadata, so multi-material slicers map colors on import
 - **STEP**: a compound of true B-rep solids for the same parts, with analytic curves throughout (plaque sheets are smooth lofts, letters exactly fill their engravings); filament assignment is manual because STEP carries no slicer metadata
-- Resolution: chord tolerance slider (0.002 to 0.2 mm) with Draft/High/Ultra presets and a live segment-count readout; applies to STL/3MF only - STEP is always smooth
+- Resolution: chord tolerance slider (0.001 to 0.2 mm) with Draft/High/Ultra presets and a live segment-count readout; applies to STL/3MF only - STEP is always smooth
 - Exports of the previewed design reuse cached geometry; an indeterminate progress bar with elapsed time covers the longer STEP builds
 
 ## Library and collections

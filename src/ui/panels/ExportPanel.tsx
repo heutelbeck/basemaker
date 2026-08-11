@@ -22,10 +22,10 @@ interface QualityPreset {
 const PRESETS: QualityPreset[] = [
   { label: 'Draft', chordTolMm: 0.1 },
   { label: 'High', chordTolMm: 0.02 },
-  { label: 'Ultra', chordTolMm: 0.005 },
+  { label: 'Ultra', chordTolMm: 0.001 },
 ];
 
-const SLIDER_MIN_LOG = Math.log10(0.002);
+const SLIDER_MIN_LOG = Math.log10(0.001);
 const SLIDER_MAX_LOG = Math.log10(0.2);
 
 const EXPORT_LABELS = {

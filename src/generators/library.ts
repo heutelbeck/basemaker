@@ -157,7 +157,7 @@ function lippedRoundBase(diameter: number): Job {
       lipTopRadius: spec.lipTopRadius,
       recess: { depth: spec.recessDepth, inset: spec.recessInset },
       hollow: { wall: 1.1, topThickness: 2, supports: null },
-      quality: { chordTolMm: 0.005 },
+      quality: { chordTolMm: 0.001 },
     },
   };
 }
