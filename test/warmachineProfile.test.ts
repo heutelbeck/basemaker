@@ -51,7 +51,7 @@ const OFFICIAL: Record<string, { nominal: number; points: [number, number][] }> 
 
 describe('warmachine profiles', () => {
   it.each(Object.entries(OFFICIAL))(
-    'library preset %s stays within 0.3 mm of the measured official wall',
+    'library preset %s stays within 0.2 mm of the measured official wall',
     (name, data) => {
       const entry = GAME_LIBRARY.find(
         (candidate) => candidate.system === 'Warmachine & Hordes' && candidate.name === name,
@@ -69,7 +69,7 @@ describe('warmachine profiles', () => {
       );
       for (const [z, officialR] of data.points) {
         const ours = data.nominal - profileInsetAt(profile, Math.min(z, params.height));
-        expect(Math.abs(ours - officialR)).toBeLessThan(0.3);
+        expect(Math.abs(ours - officialR)).toBeLessThan(0.2);
       }
     },
   );
