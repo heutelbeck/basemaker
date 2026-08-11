@@ -42,7 +42,7 @@ export function buildBase(
       outerSpec.kind === 'freeform'
         ? (freeformOutline(outerSpec, tol) as Point2[])
         : outlineFor(resolveShape(outerSpec), tol);
-    const profile = computeEdgeProfile(params.height, params.edgeSlope, params.lipRadius, tol);
+    const profile = computeEdgeProfile(params.height, params.edgeSlope, params.lipRadius, tol, params.lipTopRadius);
     const outlines = shellOutlines(wasm, bottomOutline, profile);
 
     const outer = buildShellSolid(wasm, track, outlines, profile);

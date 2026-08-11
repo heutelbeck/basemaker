@@ -1,4 +1,4 @@
-import { lipArcReachesTop, topInsetFor } from './edgeProfile.ts';
+import { lipProfileValid, topInsetFor } from './edgeProfile.ts';
 import { magnetCenters } from './magnetLayout.ts';
 import { validateSurface } from './surface.ts';
 import { freeformOutline } from './freeform.ts';
@@ -227,7 +227,7 @@ export function validate(params: BaseParams): ValidationIssue[] {
 
   const footprint = footprintCheck;
   const rIn = footprint.rIn;
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius);
+  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
 
   if (!(params.height > 0)) {
     issues.push({ code: 'height', message: ERROR_HEIGHT_POSITIVE });
@@ -239,7 +239,8 @@ export function validate(params: BaseParams): ValidationIssue[] {
   }
   if (
     params.lipRadius < 0 ||
-    !lipArcReachesTop(params.height, params.edgeSlope, params.lipRadius)
+    params.lipTopRadius < 0 ||
+    !lipProfileValid(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius)
   ) {
     issues.push({ code: 'lip-radius', message: ERROR_LIP_RADIUS_INVALID });
   } else if (params.lipRadius > params.height && params.shape.kind !== 'round') {

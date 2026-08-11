@@ -26,7 +26,7 @@ export function supportPillarCenters(params: BaseParams): Vec[] {
   const { spacing, diameter } = hollow.supports;
   const pillarRadius = diameter / 2;
   const outerSpec = params.shape.kind === 'converter' ? params.shape.outer : params.shape;
-  const profile = computeEdgeProfile(params.height, params.edgeSlope, params.lipRadius, 0.02);
+  const profile = computeEdgeProfile(params.height, params.edgeSlope, params.lipRadius, 0.02, params.lipTopRadius);
   const ceiling = params.height - hollow.topThickness;
   const inset = profileInsetAt(profile, ceiling) + hollow.wall + pillarRadius + GAP_TO_WALL;
 

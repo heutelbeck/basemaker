@@ -96,16 +96,52 @@ interface LippedSpec {
   height: number;
   edgeSlope: number;
   lipRadius: number;
+  lipTopRadius: number;
   recessInset: number;
   recessDepth: number;
 }
 
 const WARMACHINE_SPECS: Record<number, LippedSpec> = {
-  30: { height: 4.45, edgeSlope: 0, lipRadius: 4.75, recessInset: 0.15, recessDepth: 0.43 },
-  40: { height: 4.5, edgeSlope: 0.05, lipRadius: 4.85, recessInset: 0.9, recessDepth: 0.5 },
-  50: { height: 4.5, edgeSlope: 0.28, lipRadius: 4.88, recessInset: 0.9, recessDepth: 0.5 },
-  80: { height: 4.5, edgeSlope: 0.2, lipRadius: 4.85, recessInset: 1, recessDepth: 0.5 },
-  120: { height: 4.5, edgeSlope: 0.13, lipRadius: 4.71, recessInset: 1.05, recessDepth: 0.5 },
+  30: {
+    height: 4.45,
+    edgeSlope: 0,
+    lipRadius: 4.75,
+    lipTopRadius: 0.3,
+    recessInset: 0.1,
+    recessDepth: 0.43,
+  },
+  40: {
+    height: 4.5,
+    edgeSlope: 0.08,
+    lipRadius: 4.8,
+    lipTopRadius: 1.4,
+    recessInset: 0.35,
+    recessDepth: 0.5,
+  },
+  50: {
+    height: 4.5,
+    edgeSlope: 0.28,
+    lipRadius: 4.88,
+    lipTopRadius: 3.6,
+    recessInset: 0.5,
+    recessDepth: 0.5,
+  },
+  80: {
+    height: 4.5,
+    edgeSlope: 0.2,
+    lipRadius: 4.8,
+    lipTopRadius: 3.5,
+    recessInset: 0.55,
+    recessDepth: 0.5,
+  },
+  120: {
+    height: 4.5,
+    edgeSlope: 0.13,
+    lipRadius: 4.71,
+    lipTopRadius: 3.5,
+    recessInset: 0.65,
+    recessDepth: 0.5,
+  },
 };
 
 function lippedRoundBase(diameter: number): Job {
@@ -118,6 +154,7 @@ function lippedRoundBase(diameter: number): Job {
       height: spec.height,
       edgeSlope: spec.edgeSlope,
       lipRadius: spec.lipRadius,
+      lipTopRadius: spec.lipTopRadius,
       recess: { depth: spec.recessDepth, inset: spec.recessInset },
       hollow: { wall: 1.1, topThickness: 2, supports: null },
       quality: { chordTolMm: 0.005 },

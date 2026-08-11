@@ -33,7 +33,24 @@ export function BodyPanel() {
           step={0.25}
           onChange={(lipRadius) => setBaseParams((current) => ({ ...current, lipRadius }))}
         />
+        {params.lipRadius > params.height && (
+          <NumberField
+            label="Lip top roll"
+            unit="mm"
+            value={params.lipTopRadius}
+            min={0}
+            step={0.1}
+            onChange={(lipTopRadius) => setBaseParams((current) => ({ ...current, lipTopRadius }))}
+          />
+        )}
       </div>
+      {params.lipRadius > params.height && (
+        <p className="freeform-hint">
+          A lip radius larger than the height turns the whole side into one truncated arc
+          (Warmachine style); the top roll blends that arc into the top face with a smaller
+          tangent arc instead of a hard corner.
+        </p>
+      )}
       <Section
         title="Hollow underside"
         enabled={params.hollow !== null}

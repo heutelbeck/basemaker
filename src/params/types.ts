@@ -160,6 +160,7 @@ export interface BaseParams {
   height: number;
   edgeSlope: number;
   lipRadius: number;
+  lipTopRadius: number;
   hollow: HollowParams | null;
   magnets: MagnetParams | null;
   recess: RecessParams | null;
@@ -253,6 +254,7 @@ export function defaultParams(): BaseParams {
     height: 3.4,
     edgeSlope: 1.3,
     lipRadius: 0,
+    lipTopRadius: 0,
     hollow: null,
     magnets: null,
     recess: null,

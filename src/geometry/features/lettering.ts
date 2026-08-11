@@ -31,7 +31,7 @@ export function letteringBaselineRadius(params: BaseParams): number {
   if (params.shape.kind !== 'round' || params.lettering === null) {
     throw new Error(ERROR_LETTERING_SHAPE);
   }
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius);
+  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
   return params.shape.diameter / 2 - topInset - params.lettering.margin;
 }
 

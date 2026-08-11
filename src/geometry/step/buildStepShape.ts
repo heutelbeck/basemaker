@@ -8,7 +8,7 @@ import { hexOutline } from '../../params/tessellation.ts';
 import type { Vec } from '../../params/polygon.ts';
 import type { ResolvedShape } from '../../params/shapeMetrics.ts';
 import { resolveShape } from '../../params/shapeMetrics.ts';
-import { profileInsetAt, topInsetFor } from '../../params/edgeProfile.ts';
+import { arcPointAt, lipShape, topInsetFor } from '../../params/edgeProfile.ts';
 import { supportPillarCenters } from '../../params/supports.ts';
 import type { BaseParams, MagnetParams } from '../../params/types.ts';
 import { SLOTTA_RIM } from '../../params/types.ts';
@@ -31,30 +31,29 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
       ? polylineDrawing(freeformOutline(outerSpec, params.quality.chordTolMm))
       : footprintDrawing(resolveShape(outerSpec));
   const loftTop = params.edgeSlope > 0 ? bottom.offset(-params.edgeSlope) : bottom;
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius);
+  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
   const top = topInset > 0 ? bottom.offset(-topInset) : bottom;
 
   let solid: Shape3D;
   if (params.lipRadius > params.height && outerSpec.kind === 'round') {
-    // Truncated arc side: one circle spans the whole wall, so the body is
-    // a revolve of the exact profile with the arc as a true curve.
+    // Truncated arc side: one circle spans the whole wall (plus the
+    // optional top roll), so the body is a revolve of the exact profile
+    // with the arcs as true curves.
     const radius = outerSpec.diameter / 2;
-    const profile = {
-      height: params.height,
-      edgeSlope: params.edgeSlope,
-      lipRadius: params.lipRadius,
-      topInset,
-      samples: [],
-    };
-    const midInset = profileInsetAt(profile, params.height / 2);
-    const section = draw([0, 0])
+    const shape = lipShape(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
+    const mainMid = arcPointAt(shape.main, (shape.main.startAngle + shape.main.endAngle) / 2);
+    const mainEnd = arcPointAt(shape.main, shape.main.endAngle);
+    let pen = draw([0, 0])
       .lineTo([radius, 0])
-      .threePointsArcTo(
+      .threePointsArcTo([radius - mainEnd.inset, mainEnd.z], [radius - mainMid.inset, mainMid.z]);
+    if (shape.roll !== null) {
+      const rollMid = arcPointAt(shape.roll, (shape.roll.startAngle + shape.roll.endAngle) / 2);
+      pen = pen.threePointsArcTo(
         [radius - topInset, params.height],
-        [radius - midInset, params.height / 2],
-      )
-      .lineTo([0, params.height])
-      .close();
+        [radius - rollMid.inset, rollMid.z],
+      );
+    }
+    const section = pen.lineTo([0, params.height]).close();
     solid = asShape3D((section.sketchOnPlane('XZ') as Sketch).revolve());
   } else {
     const bottomSketch = bottom.sketchOnPlane('XY') as Sketch;

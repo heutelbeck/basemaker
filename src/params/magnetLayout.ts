@@ -141,7 +141,7 @@ export function magnetCenters(params: BaseParams): Vec[] {
     ]);
   }
   const footprint = footprintOf(params);
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius);
+  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
   const margin = magnetHalfExtent(magnets) + magnets.padding + topInset + 0.3;
   return magnets.layout === 'grid'
     ? gridCenters(footprint, margin, magnets.count)
