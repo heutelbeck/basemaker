@@ -120,9 +120,25 @@ export interface LetteringParams {
 export type PlaqueStyle = 'plate' | 'scroll';
 
 /**
- * Decorative name tablet on the side wall of a round base: a riveted
- * steel plate or a parchment scroll with rolled ends. Side lettering at
- * the same angle lands on the plaque face.
+ * Text carried by a plaque, rendered with the side lettering machinery
+ * at the plaque's own angle. Each plaque configures its text fully
+ * independently, including the font face.
+ */
+export interface PlaqueTextParams {
+  text: string;
+  sizeMm: number;
+  depth: number;
+  strokeBoostMm: number;
+  style: LetteringStyle;
+  font: LetteringFontFace;
+  colorHex: string;
+}
+
+/**
+ * Decorative name tablet on the side wall of a base: a riveted steel
+ * plate or a parchment scroll with rolled ends, optionally carrying its
+ * own text. A base takes up to two independently configured plaques,
+ * for example a name plate on the front and a squad number on the back.
  */
 export interface PlaqueParams {
   style: PlaqueStyle;
@@ -132,6 +148,7 @@ export interface PlaqueParams {
   thicknessMm: number;
   rivetHeightMm: number;
   colorHex: string;
+  text: PlaqueTextParams | null;
 }
 
 export interface QualityParams {
@@ -149,6 +166,7 @@ export interface BaseParams {
   slotta: SlottaParams | null;
   lettering: LetteringParams | null;
   plaque: PlaqueParams | null;
+  plaqueBack: PlaqueParams | null;
   surface: SurfaceParams | null;
   quality: QualityParams;
 }
@@ -180,6 +198,55 @@ export function towEdgeSlopeFor(height: number): number {
   return Number((height * TOW_SLOPE_RATIO).toFixed(2));
 }
 
+/**
+ * The side lettering parameters equivalent to a plaque's own text, or
+ * null for a plain plaque. The letters land at the plaque's angle.
+ */
+export function plaqueLettering(plaque: PlaqueParams): LetteringParams | null {
+  const text = plaque.text ?? null;
+  if (text === null || text.text.trim() === '') {
+    return null;
+  }
+  return {
+    text: text.text,
+    sizeMm: text.sizeMm,
+    depth: text.depth,
+    margin: 0,
+    angleDeg: plaque.angleDeg,
+    colorHex: text.colorHex,
+    strokeBoostMm: text.strokeBoostMm,
+    style: text.style,
+    placement: 'side',
+    font: text.font,
+  };
+}
+
+/** The configured plaques of a base, front first. */
+export function configuredPlaques(params: BaseParams): PlaqueParams[] {
+  const plaques: PlaqueParams[] = [];
+  if (params.plaque !== null) {
+    plaques.push(params.plaque);
+  }
+  if ((params.plaqueBack ?? null) !== null && params.plaqueBack !== null) {
+    plaques.push(params.plaqueBack);
+  }
+  return plaques;
+}
+
+/**
+ * One parameter set per configured plaque, each seeing only its own
+ * plaque with the plaque text as side lettering. All plaque geometry
+ * and lettering builders consume these variants unchanged.
+ */
+export function plaqueVariants(params: BaseParams): BaseParams[] {
+  return configuredPlaques(params).map((plaque) => ({
+    ...params,
+    plaque,
+    plaqueBack: null,
+    lettering: plaqueLettering(plaque),
+  }));
+}
+
 export function defaultParams(): BaseParams {
   return {
     shape: { kind: 'round', diameter: 32 },
@@ -192,6 +259,7 @@ export function defaultParams(): BaseParams {
     slotta: null,
     lettering: null,
     plaque: null,
+    plaqueBack: null,
     surface: null,
     quality: { chordTolMm: 0.02 },
   };

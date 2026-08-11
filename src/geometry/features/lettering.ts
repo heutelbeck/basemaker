@@ -4,7 +4,11 @@ import { topInsetFor } from '../../params/edgeProfile.ts';
 import type { BaseParams, LetteringParams } from '../../params/types.ts';
 import type { Track } from '../dispose.ts';
 import type { GlyphLayout } from '../lettering/textOutlines.ts';
-import { glyphVerticalCenter, layoutGlyphsOnArc, textArcContourGroups } from '../lettering/textOutlines.ts';
+import {
+  glyphVerticalCenter,
+  layoutGlyphsOnArc,
+  textArcContourGroups,
+} from '../lettering/textOutlines.ts';
 import { plaqueProud } from './plaque.ts';
 import { CUT_EPSILON } from './shell.ts';
 
@@ -19,11 +23,7 @@ const SIDE_EMBED = 0.4;
  * Outward offset that fattens glyph strokes so small text survives the
  * printer's extrusion width; counters shrink accordingly.
  */
-function boostSection(
-  track: Track,
-  section: CrossSection,
-  boostMm: number,
-): CrossSection {
+function boostSection(track: Track, section: CrossSection, boostMm: number): CrossSection {
   return boostMm > 0 ? track(section.offset(boostMm, 'Round', 2, 16)) : section;
 }
 
@@ -62,18 +62,20 @@ function topPrism(
   thickness: number,
 ): Manifold {
   const groups = textArcContourGroups(font, lettering, letteringBaselineRadius(params));
-  const sections = groups.map((group) =>
-    boostSection(
-      track,
-      track(
-        wasm.CrossSection.ofPolygons(
-          group.map((contour) => contour.points),
-          'EvenOdd',
+  const sections = groups
+    .filter((group) => group.length > 0)
+    .map((group) =>
+      boostSection(
+        track,
+        track(
+          wasm.CrossSection.ofPolygons(
+            group.map((contour) => contour.points),
+            'EvenOdd',
+          ),
         ),
+        lettering.strokeBoostMm,
       ),
-      lettering.strokeBoostMm,
-    ),
-  );
+    );
   const merged = sections.reduce((union, section) => track(union.add(section)));
   const prism = track(wasm.Manifold.extrude(merged, thickness));
   return track(prism.translate(0, 0, fromZ));
@@ -101,32 +103,34 @@ function sideGlyphPrisms(
   const cosSlope = Math.cos(wall.slopeRad);
   const layouts: GlyphLayout[] = layoutGlyphsOnArc(font, lettering, wall.radius);
   const verticalCenter = glyphVerticalCenter(layouts);
-  const prisms = layouts.map((layout) => {
-    const section = boostSection(
-      track,
-      track(
-        wasm.CrossSection.ofPolygons(
-          layout.contours.map((contour) => contour.points),
-          'EvenOdd',
+  const prisms = layouts
+    .filter((layout) => layout.contours.length > 0)
+    .map((layout) => {
+      const section = boostSection(
+        track,
+        track(
+          wasm.CrossSection.ofPolygons(
+            layout.contours.map((contour) => contour.points),
+            'EvenOdd',
+          ),
         ),
-      ),
-      lettering.strokeBoostMm,
-    );
-    const local = track(wasm.Manifold.extrude(section, thickness));
-    const rotated = track(local.rotate(90 - slopeDeg, 0, (layout.angle * 180) / Math.PI + 90));
-    const cos = Math.cos(layout.angle);
-    const sin = Math.sin(layout.angle);
-    const up = [-sinSlope * cos, -sinSlope * sin, cosSlope];
-    const anchor = [
-      wall.radius * cos - verticalCenter * up[0] + radialFrom * cos,
-      wall.radius * sin - verticalCenter * up[1] + radialFrom * sin,
-      wall.centerZ -
-        verticalCenter * up[2] +
-        (radialFrom - plaqueProud(params)) * Math.tan(wall.slopeRad) +
-        0.6 * plaqueProud(params) * Math.sin(wall.slopeRad),
-    ];
-    return track(rotated.translate(anchor[0], anchor[1], anchor[2]));
-  });
+        lettering.strokeBoostMm,
+      );
+      const local = track(wasm.Manifold.extrude(section, thickness));
+      const rotated = track(local.rotate(90 - slopeDeg, 0, (layout.angle * 180) / Math.PI + 90));
+      const cos = Math.cos(layout.angle);
+      const sin = Math.sin(layout.angle);
+      const up = [-sinSlope * cos, -sinSlope * sin, cosSlope];
+      const anchor = [
+        wall.radius * cos - verticalCenter * up[0] + radialFrom * cos,
+        wall.radius * sin - verticalCenter * up[1] + radialFrom * sin,
+        wall.centerZ -
+          verticalCenter * up[2] +
+          (radialFrom - plaqueProud(params)) * Math.tan(wall.slopeRad) +
+          0.6 * plaqueProud(params) * Math.sin(wall.slopeRad),
+      ];
+      return track(rotated.translate(anchor[0], anchor[1], anchor[2]));
+    });
   return track(wasm.Manifold.union(prisms));
 }
 

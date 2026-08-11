@@ -45,10 +45,23 @@ export function ensureFont(face: LetteringFontFace = 'sans'): Promise<Font> {
   }
   let pending = loaded.get(face);
   if (pending === undefined) {
-    pending = fetchFace(face);
+    pending = fetchFace(face).then((font) => {
+      injected.set(face, font);
+      return font;
+    });
     loaded.set(face, pending);
   }
   return pending;
+}
+
+/**
+ * The already loaded font for a face, or null when it has not been
+ * ensured yet. Geometry code uses this to resolve per-plaque fonts
+ * synchronously after the job layer awaited ensureFont for every face
+ * in use.
+ */
+export function fontFor(face: LetteringFontFace): Font | null {
+  return injected.get(face) ?? null;
 }
 
 export function initFontFromBuffer(buffer: ArrayBuffer, face: LetteringFontFace = 'sans'): Font {

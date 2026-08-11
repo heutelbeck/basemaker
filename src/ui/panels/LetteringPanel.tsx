@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
-import type { LetteringParams, PlaqueParams } from '../../params/types.ts';
-import { registerLetteringFont, setBaseParams, useBaseParams } from '../../state/store.ts';
+import type { LetteringParams, PlaqueParams, PlaqueTextParams } from '../../params/types.ts';
+import { setBaseParams, useBaseParams } from '../../state/store.ts';
+import { FontPicker } from '../controls/FontPicker.tsx';
 import { NumberField } from '../controls/NumberField.tsx';
 import { Select } from '../controls/Select.tsx';
+import { Toggle } from '../controls/Toggle.tsx';
 import { Section } from './Section.tsx';
 
 const DEFAULT_LETTERING: LetteringParams = {
@@ -26,7 +27,24 @@ const DEFAULT_PLAQUE: PlaqueParams = {
   thicknessMm: 0.7,
   rivetHeightMm: 0.2,
   colorHex: '#9AA5B1',
+  text: null,
 };
+
+const DEFAULT_PLAQUE_TEXT: PlaqueTextParams = {
+  text: 'HERO',
+  sizeMm: 1.2,
+  depth: 0.6,
+  strokeBoostMm: 0,
+  style: 'engraved',
+  font: 'sans',
+  colorHex: '#e8833a',
+};
+
+const STYLE_OPTIONS = [
+  { value: 'engraved', label: 'Embedded (flush inlay)' },
+  { value: 'embossed', label: 'Raised' },
+  { value: 'recessed', label: 'Engraved (empty recess)' },
+];
 
 const SIDE_OPTIONS: Record<string, { value: string; label: string }[]> = {
   square: [
@@ -67,114 +85,241 @@ function plaqueSideOptions(kind: string): { value: string; label: string }[] | n
   return null;
 }
 
+function PlaqueTextFields({
+  text,
+  onChange,
+}: {
+  text: PlaqueTextParams;
+  onChange: (change: Partial<PlaqueTextParams>) => void;
+}) {
+  return (
+    <>
+      <label className="field">
+        <span className="field-label">Text</span>
+        <input
+          type="text"
+          value={text.text}
+          maxLength={24}
+          onChange={(event) => onChange({ text: event.target.value })}
+        />
+      </label>
+      <div className="field-row">
+        <Select
+          label="Text style"
+          value={text.style}
+          options={STYLE_OPTIONS}
+          onChange={(style) => onChange({ style: style as PlaqueTextParams['style'] })}
+        />
+        <NumberField
+          label="Size"
+          unit="mm"
+          value={text.sizeMm}
+          min={0.5}
+          step={0.1}
+          onChange={(sizeMm) => onChange({ sizeMm })}
+        />
+        <NumberField
+          label="Depth"
+          unit="mm"
+          value={text.depth}
+          min={0.2}
+          step={0.1}
+          onChange={(depth) => onChange({ depth })}
+        />
+        <NumberField
+          label="Stroke boost"
+          unit="mm"
+          value={text.strokeBoostMm}
+          min={0}
+          max={0.4}
+          step={0.05}
+          onChange={(strokeBoostMm) => onChange({ strokeBoostMm })}
+        />
+      </div>
+      <FontPicker value={text.font} onChange={(font) => onChange({ font })} />
+      {text.style !== 'recessed' && (
+        <label className="field">
+          <span className="field-label">Text color (3MF export)</span>
+          <input
+            type="color"
+            value={text.colorHex}
+            onChange={(event) => onChange({ colorHex: event.target.value })}
+          />
+        </label>
+      )}
+    </>
+  );
+}
+
+function PlaqueFields({
+  plaque,
+  sideOptions,
+  onChange,
+}: {
+  plaque: PlaqueParams;
+  sideOptions: { value: string; label: string }[] | null;
+  onChange: (change: Partial<PlaqueParams>) => void;
+}) {
+  return (
+    <>
+      <div className="field-row">
+        <Select
+          label="Style"
+          value={plaque.style}
+          options={[
+            { value: 'plate', label: 'Riveted plate' },
+            { value: 'scroll', label: 'Scroll' },
+          ]}
+          onChange={(style) =>
+            onChange({
+              style: style as PlaqueParams['style'],
+              thicknessMm: style === 'scroll' ? 0.4 : 0.7,
+            })
+          }
+        />
+        {sideOptions === null ? (
+          <NumberField
+            label="Position"
+            unit="deg"
+            value={plaque.angleDeg}
+            step={15}
+            onChange={(angleDeg) => onChange({ angleDeg })}
+          />
+        ) : (
+          <Select
+            label="Side"
+            value={String(plaque.angleDeg)}
+            options={sideOptions}
+            onChange={(angle) => onChange({ angleDeg: Number(angle) })}
+          />
+        )}
+      </div>
+      <div className="field-row">
+        <NumberField
+          label="Width"
+          unit="mm"
+          value={plaque.widthMm}
+          min={4}
+          step={1}
+          onChange={(widthMm) => onChange({ widthMm })}
+        />
+        <NumberField
+          label="Height"
+          unit="mm"
+          value={plaque.heightMm}
+          min={1}
+          step={0.2}
+          onChange={(heightMm) => onChange({ heightMm })}
+        />
+        <NumberField
+          label="Thickness"
+          unit="mm"
+          value={plaque.thicknessMm}
+          min={0.2}
+          max={2}
+          step={0.1}
+          onChange={(thicknessMm) => onChange({ thicknessMm })}
+        />
+        {plaque.style === 'plate' && (
+          <NumberField
+            label="Rivet height"
+            unit="mm"
+            value={plaque.rivetHeightMm}
+            min={0.05}
+            max={0.6}
+            step={0.05}
+            onChange={(rivetHeightMm) => onChange({ rivetHeightMm })}
+          />
+        )}
+      </div>
+      <label className="field">
+        <span className="field-label">Plaque color (3MF export)</span>
+        <input
+          type="color"
+          value={plaque.colorHex}
+          onChange={(event) => onChange({ colorHex: event.target.value })}
+        />
+      </label>
+      <Toggle
+        label="Text on this plaque"
+        checked={plaque.text !== null}
+        onChange={(enabled) => onChange({ text: enabled ? DEFAULT_PLAQUE_TEXT : null })}
+      />
+      {plaque.text !== null && (
+        <PlaqueTextFields
+          text={plaque.text}
+          onChange={(change) =>
+            onChange({ text: plaque.text === null ? null : { ...plaque.text, ...change } })
+          }
+        />
+      )}
+    </>
+  );
+}
+
 export function SidePlaquePanel() {
   const plaque = useBaseParams().plaque;
+  const plaqueBack = useBaseParams().plaqueBack;
   const shape = useBaseParams().shape;
   const shapeKind = shape.kind === 'converter' ? shape.outer.kind : shape.kind;
   const sideOptions = plaqueSideOptions(shapeKind);
 
-  const update = (change: Partial<PlaqueParams>) => {
-    setBaseParams((current) => ({
-      ...current,
-      plaque: current.plaque === null ? null : { ...current.plaque, ...change },
-    }));
-  };
-
   return (
     <Section
-      title="Side plaque"
+      title="Side plaques"
       enabled={plaque !== null}
       onToggle={(enabled) =>
         setBaseParams((current) => ({
           ...current,
           plaque: enabled ? DEFAULT_PLAQUE : null,
+          plaqueBack: null,
+          lettering: enabled ? null : current.lettering,
         }))
       }
     >
       {plaque !== null && (
         <>
-          <div className="field-row">
-            <Select
-              label="Style"
-              value={plaque.style}
-              options={[
-                { value: 'plate', label: 'Riveted plate' },
-                { value: 'scroll', label: 'Scroll' },
-              ]}
-              onChange={(style) =>
-                update({
-                  style: style as PlaqueParams['style'],
-                  thicknessMm: style === 'scroll' ? 0.4 : 0.7,
-                })
+          <PlaqueFields
+            plaque={plaque}
+            sideOptions={sideOptions}
+            onChange={(change) =>
+              setBaseParams((current) => ({
+                ...current,
+                plaque: current.plaque === null ? null : { ...current.plaque, ...change },
+              }))
+            }
+          />
+          <Toggle
+            label="Second plaque on the opposite side"
+            checked={plaqueBack !== null}
+            onChange={(enabled) =>
+              setBaseParams((current) => ({
+                ...current,
+                plaqueBack:
+                  enabled && current.plaque !== null
+                    ? { ...current.plaque, angleDeg: current.plaque.angleDeg + 180, text: null }
+                    : null,
+              }))
+            }
+          />
+          {plaqueBack !== null && (
+            <PlaqueFields
+              plaque={plaqueBack}
+              sideOptions={sideOptions}
+              onChange={(change) =>
+                setBaseParams((current) => ({
+                  ...current,
+                  plaqueBack:
+                    current.plaqueBack === null ? null : { ...current.plaqueBack, ...change },
+                }))
               }
             />
-            {sideOptions === null ? (
-              <NumberField
-                label="Position"
-                unit="deg"
-                value={plaque.angleDeg}
-                step={15}
-                onChange={(angleDeg) => update({ angleDeg })}
-              />
-            ) : (
-              <Select
-                label="Side"
-                value={String(plaque.angleDeg)}
-                options={sideOptions}
-                onChange={(angle) => update({ angleDeg: Number(angle) })}
-              />
-            )}
-          </div>
-          <div className="field-row">
-            <NumberField
-              label="Width"
-              unit="mm"
-              value={plaque.widthMm}
-              min={4}
-              step={1}
-              onChange={(widthMm) => update({ widthMm })}
-            />
-            <NumberField
-              label="Height"
-              unit="mm"
-              value={plaque.heightMm}
-              min={1}
-              step={0.2}
-              onChange={(heightMm) => update({ heightMm })}
-            />
-            <NumberField
-              label="Thickness"
-              unit="mm"
-              value={plaque.thicknessMm}
-              min={0.2}
-              max={2}
-              step={0.1}
-              onChange={(thicknessMm) => update({ thicknessMm })}
-            />
-            {plaque.style === 'plate' && (
-              <NumberField
-                label="Rivet height"
-                unit="mm"
-                value={plaque.rivetHeightMm}
-                min={0.05}
-                max={0.6}
-                step={0.05}
-                onChange={(rivetHeightMm) => update({ rivetHeightMm })}
-              />
-            )}
-          </div>
-          <label className="field">
-            <span className="field-label">Plaque color (3MF export)</span>
-            <input
-              type="color"
-              value={plaque.colorHex}
-              onChange={(event) => update({ colorHex: event.target.value })}
-            />
-          </label>
+          )}
           <p className="freeform-hint">
-            A tablet on the side wall, with or without lettering. On round bases, put side
-            lettering at the same position to write on the plaque; on straight-edged bases
-            the plaque sits on one flat side.
+            Up to two independently configured tablets on the side wall, each with its own
+            style, size, color, and text (name on the front, squad number on the back).
+            Plaque text replaces rim lettering; both cannot be combined. Text needs a round
+            base.
           </p>
         </>
       )}
@@ -182,56 +327,8 @@ export function SidePlaquePanel() {
   );
 }
 
-interface LocalFontData {
-  family: string;
-  style: string;
-  blob(): Promise<Blob>;
-}
-
-const BUILTIN_FONT_OPTIONS = [
-  { value: 'sans', label: 'Sans' },
-  { value: 'serif', label: 'Serif' },
-  { value: 'mono', label: 'Mono' },
-];
-
 export function LetteringPanel() {
   const lettering = useBaseParams().lettering;
-  const localFontsRef = useRef<LocalFontData[]>([]);
-  const [localFamilies, setLocalFamilies] = useState<string[] | null>(null);
-  const [fontNotice, setFontNotice] = useState<string | null>(null);
-
-  const browseSystemFonts = async () => {
-    const query = (window as unknown as { queryLocalFonts?: () => Promise<LocalFontData[]> })
-      .queryLocalFonts;
-    if (query === undefined) {
-      setFontNotice('System fonts need a Chromium browser with the Local Font Access API.');
-      return;
-    }
-    try {
-      const fonts = await query.call(window);
-      localFontsRef.current = fonts;
-      setLocalFamilies([...new Set(fonts.map((font) => font.family))].sort());
-      setFontNotice(null);
-    } catch {
-      setFontNotice('Access to system fonts was denied.');
-    }
-  };
-
-  const pickSystemFont = async (family: string) => {
-    const candidates = localFontsRef.current.filter((font) => font.family === family);
-    const preferred = candidates.find((font) => /bold/i.test(font.style)) ?? candidates[0];
-    if (preferred === undefined) {
-      return;
-    }
-    try {
-      const blob = await preferred.blob();
-      await registerLetteringFont(family, await blob.arrayBuffer());
-      update({ font: family });
-      setFontNotice(null);
-    } catch {
-      setFontNotice('The selected font could not be loaded.');
-    }
-  };
 
   const update = (change: Partial<LetteringParams>) => {
     setBaseParams((current) => ({
@@ -248,6 +345,8 @@ export function LetteringPanel() {
         setBaseParams((current) => ({
           ...current,
           lettering: enabled ? DEFAULT_LETTERING : null,
+          plaque: enabled ? null : current.plaque,
+          plaqueBack: enabled ? null : current.plaqueBack,
         }))
       }
     >
@@ -266,11 +365,7 @@ export function LetteringPanel() {
             <Select
               label="Style"
               value={lettering.style}
-              options={[
-                { value: 'engraved', label: 'Embedded (flush inlay)' },
-                { value: 'embossed', label: 'Raised on top' },
-                { value: 'recessed', label: 'Engraved (empty recess)' },
-              ]}
+              options={STYLE_OPTIONS}
               onChange={(style) => update({ style: style as LetteringParams['style'] })}
             />
             <Select
@@ -284,41 +379,8 @@ export function LetteringPanel() {
                 update({ placement: placement as LetteringParams['placement'] })
               }
             />
-            <Select
-              label="Font"
-              value={lettering.font}
-              options={
-                BUILTIN_FONT_OPTIONS.some((option) => option.value === lettering.font)
-                  ? BUILTIN_FONT_OPTIONS
-                  : [
-                      ...BUILTIN_FONT_OPTIONS,
-                      { value: lettering.font, label: `${lettering.font} (system)` },
-                    ]
-              }
-              onChange={(font) => update({ font })}
-            />
           </div>
-          <div className="field-row">
-            <button type="button" onClick={() => void browseSystemFonts()}>
-              Browse system fonts
-            </button>
-            {localFamilies !== null && (
-              <Select
-                label="System font"
-                value={localFamilies.includes(lettering.font) ? lettering.font : ''}
-                options={[
-                  { value: '', label: 'Pick a family...' },
-                  ...localFamilies.map((family) => ({ value: family, label: family })),
-                ]}
-                onChange={(family) => {
-                  if (family !== '') {
-                    void pickSystemFont(family);
-                  }
-                }}
-              />
-            )}
-          </div>
-          {fontNotice !== null && <p className="freeform-hint">{fontNotice}</p>}
+          <FontPicker value={lettering.font} onChange={(font) => update({ font })} />
           <div className="field-row">
             <NumberField
               label="Size"
@@ -380,11 +442,10 @@ export function LetteringPanel() {
             their own colored part); engraved letters leave an empty recess for painting. For
             multi-color FDM, letters need about 2.5 mm size with a 0.4 mm nozzle or about 1.2 mm
             with a 0.2 mm nozzle - below that, use stroke boost to fatten thin strokes, or engrave
-            and paint.
+            and paint. Rim lettering replaces side plaques; use plaque text to write on a plaque.
           </p>
         </>
       )}
     </Section>
   );
 }
-

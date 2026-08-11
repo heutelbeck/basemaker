@@ -5,7 +5,9 @@ import { magnetCenters } from '../params/magnetLayout.ts';
 import { freeformOutline } from '../params/freeform.ts';
 import { resolveShape } from '../params/shapeMetrics.ts';
 import { supportPillarCenters } from '../params/supports.ts';
-import type { BaseParams } from '../params/types.ts';
+import type { BaseParams, PlaqueParams } from '../params/types.ts';
+import { configuredPlaques, plaqueVariants } from '../params/types.ts';
+import { fontFor } from './lettering/font.ts';
 import { withGeometryScope } from './dispose.ts';
 import { converterInsertCutter } from './features/converter.ts';
 import { letteringCutter, letteringSolids } from './features/lettering.ts';
@@ -91,8 +93,9 @@ export function buildBase(
       }
     }
 
-    if (params.plaque !== null) {
-      solid = track(solid.add(plaqueSolid(wasm, track, params, bottomOutline)));
+    const variants = plaqueVariants(params);
+    for (const variant of variants) {
+      solid = track(solid.add(plaqueSolid(wasm, track, variant, bottomOutline)));
     }
 
     const cutters: Manifold[] = [];
@@ -123,6 +126,19 @@ export function buildBase(
         cutters.push(cutter);
       }
     }
+    for (const variant of variants) {
+      if (variant.lettering === null) {
+        continue;
+      }
+      const plaqueFont = fontFor(variant.lettering.font);
+      if (plaqueFont === null) {
+        throw new Error(ERROR_LETTERING_NEEDS_FONT);
+      }
+      const cutter = letteringCutter(wasm, track, plaqueFont, variant);
+      if (cutter !== null) {
+        cutters.push(cutter);
+      }
+    }
     if (cutters.length > 0) {
       solid = track(wasm.Manifold.difference([solid, ...cutters]));
     }
@@ -135,24 +151,74 @@ export function buildBase(
   });
 }
 
+export interface PlaquePart {
+  plaque: PlaqueParams;
+  solid: Manifold;
+  letters: Manifold | null;
+}
+
 /**
- * The plaque part for multi-part exports: the raw plaque solid with any
- * engraved side lettering cut in, so the letters part fills it exactly.
- * The caller owns the returned manifold.
+ * One printable part per configured plaque for multi-part exports: the
+ * plaque solid with its own text cut in where the style engraves, plus
+ * the letter solids that fill the engraving (or stand on the face) as a
+ * separately colored part. The caller owns every returned manifold.
  */
-export function buildPlaqueSolidLettered(
-  wasm: ManifoldToplevel,
-  params: BaseParams,
-  font: Font | null,
-): Manifold {
+export function buildPlaqueParts(wasm: ManifoldToplevel, params: BaseParams): PlaquePart[] {
   return withGeometryScope((track) => {
-    const raw = plaqueSolid(wasm, track, params, baseBottomOutline(params));
-    if (params.lettering === null || font === null || params.lettering.placement !== 'side') {
-      return raw;
+    const plaques = configuredPlaques(params);
+    const variants = plaqueVariants(params);
+    if (variants.length === 0) {
+      return [];
     }
-    const cutter = letteringCutter(wasm, track, font, params);
-    return cutter === null ? raw : track(raw.subtract(cutter));
+    const outline = baseBottomOutline(params);
+    const needsReference = variants.some(
+      (variant) => variant.lettering !== null && variant.lettering.style !== 'recessed',
+    );
+    const reference = needsReference
+      ? track(buildBase(wasm, letterReferenceParams(params)))
+      : null;
+    return variants.map((variant, index) => {
+      const raw = plaqueSolid(wasm, track, variant, outline);
+      let solid = raw;
+      let letters: Manifold | null = null;
+      if (variant.lettering !== null) {
+        const plaqueFont = fontFor(variant.lettering.font);
+        if (plaqueFont === null) {
+          throw new Error(ERROR_LETTERING_NEEDS_FONT);
+        }
+        const cutter = letteringCutter(wasm, track, plaqueFont, variant);
+        if (cutter !== null) {
+          solid = track(raw.subtract(cutter));
+        }
+        if (variant.lettering.style !== 'recessed' && reference !== null) {
+          letters = letteringSolids(wasm, track, plaqueFont, variant, reference);
+        }
+      }
+      return {
+        plaque: plaques[index],
+        solid: solid.translate(0, 0, 0),
+        letters: letters === null ? null : letters.translate(0, 0, 0),
+      };
+    });
   });
+}
+
+/**
+ * The parameters of the letter-free reference body that letter solids
+ * are trimmed against: all engravings stripped (rim lettering and every
+ * plaque text), all plaque solids kept, so letters meet the uncut
+ * surface exactly.
+ */
+function letterReferenceParams(params: BaseParams): BaseParams {
+  return {
+    ...params,
+    lettering: null,
+    plaque: params.plaque === null ? null : { ...params.plaque, text: null },
+    plaqueBack:
+      (params.plaqueBack ?? null) === null || params.plaqueBack === null
+        ? null
+        : { ...params.plaqueBack, text: null },
+  };
 }
 
 /** The footprint outline of the base's outer shape at its quality tolerance. */
@@ -176,7 +242,7 @@ export function buildLetterSolids(
   font: Font,
 ): Manifold {
   return withGeometryScope((track) => {
-    const reference = track(buildBase(wasm, { ...params, lettering: null }));
+    const reference = track(buildBase(wasm, letterReferenceParams(params)));
     return letteringSolids(wasm, track, font, params, reference);
   });
 }
@@ -190,12 +256,29 @@ export function buildBaseSingleSolid(
   params: BaseParams,
   font: Font | null = null,
 ): Manifold {
-  if (params.lettering === null || params.lettering.style !== 'embossed' || font === null) {
+  const rimEmbossed =
+    params.lettering !== null && params.lettering.style === 'embossed' && font !== null;
+  const plaqueEmbossed = plaqueVariants(params).some(
+    (variant) => variant.lettering !== null && variant.lettering.style === 'embossed',
+  );
+  if (!rimEmbossed && !plaqueEmbossed) {
     return buildBase(wasm, params, font);
   }
   return withGeometryScope((track) => {
-    const body = track(buildBase(wasm, params, font));
-    const letters = track(buildLetterSolids(wasm, params, font));
-    return track(body.add(letters));
+    let body = track(buildBase(wasm, params, font));
+    if (rimEmbossed && font !== null) {
+      body = track(body.add(track(buildLetterSolids(wasm, params, font))));
+    }
+    if (plaqueEmbossed) {
+      for (const part of buildPlaqueParts(wasm, params)) {
+        part.solid.delete();
+        if (part.letters !== null && part.plaque.text?.style === 'embossed') {
+          body = track(body.add(track(part.letters)));
+        } else {
+          part.letters?.delete();
+        }
+      }
+    }
+    return body;
   });
 }

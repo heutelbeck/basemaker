@@ -84,11 +84,40 @@ function migrate(entry: StoredEntry): SavedBase {
     }
     migrated.job.params.lettering ??= null;
     migrated.job.params.plaque ??= null;
-    if (migrated.job.params.plaque !== null) {
-      migrated.job.params.plaque.rivetHeightMm ??= 0.2;
-      migrated.job.params.plaque.colorHex ??= '#9AA5B1';
-      migrated.job.params.plaque.thicknessMm ??=
-        migrated.job.params.plaque.style === 'plate' ? 0.7 : 0.5;
+    migrated.job.params.plaqueBack ??= null;
+    const plaque = migrated.job.params.plaque;
+    if (plaque !== null) {
+      plaque.rivetHeightMm ??= 0.2;
+      plaque.colorHex ??= '#9AA5B1';
+      plaque.thicknessMm ??= plaque.style === 'plate' ? 0.7 : 0.5;
+      plaque.text ??= null;
+      const lettering = migrated.job.params.lettering;
+      if (plaque.text === null && lettering !== null && lettering.placement === 'side') {
+        plaque.text = {
+          text: lettering.text,
+          sizeMm: lettering.sizeMm,
+          depth: lettering.depth,
+          strokeBoostMm: lettering.strokeBoostMm ?? 0,
+          style: lettering.style,
+          font: lettering.font,
+          colorHex: lettering.colorHex,
+        };
+        const legacyBack = (plaque as unknown as Record<string, unknown>).backText;
+        if (typeof legacyBack === 'string' && migrated.job.params.plaqueBack === null) {
+          migrated.job.params.plaqueBack = {
+            ...plaque,
+            angleDeg: plaque.angleDeg + 180,
+            text: legacyBack.trim() === '' ? null : { ...plaque.text, text: legacyBack },
+          };
+        }
+        migrated.job.params.lettering = null;
+      }
+      delete (plaque as unknown as Record<string, unknown>).backText;
+    }
+    const plaqueBack = migrated.job.params.plaqueBack;
+    if (plaqueBack !== null) {
+      plaqueBack.text ??= null;
+      delete (plaqueBack as unknown as Record<string, unknown>).backText;
     }
     migrated.job.params.surface ??= null;
     const surface = migrated.job.params.surface;

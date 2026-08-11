@@ -1,6 +1,6 @@
 import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import type { Shape3D } from 'replicad';
-import { buildBase, buildBaseSingleSolid, buildLetterSolids, buildPlaqueSolidLettered } from '../geometry/buildBase.ts';
+import { buildBase, buildBaseSingleSolid, buildLetterSolids, buildPlaqueParts } from '../geometry/buildBase.ts';
 import { ensureFont } from '../geometry/lettering/font.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
 import { analyzeOverhangs } from '../geometry/overhang.ts';
@@ -28,7 +28,7 @@ import { defaultTemplateParams, validateTemplate } from '../params/template.ts';
 import type { RulerParams } from '../params/ruler.ts';
 import { defaultRulerParams, validateRuler } from '../params/ruler.ts';
 import type { BaseParams } from '../params/types.ts';
-import { defaultParams } from '../params/types.ts';
+import { configuredPlaques, defaultParams } from '../params/types.ts';
 import type { ValidationIssue } from '../params/validate.ts';
 import { validate } from '../params/validate.ts';
 import { baseFilenameSlug, shapeSlug } from './filenames.ts';
@@ -110,9 +110,24 @@ export function validateJob(job: Job): ValidationIssue[] {
   }
 }
 
+/** Loads every font face a base's lettering and plaque texts refer to. */
+async function ensureBaseFonts(params: BaseParams): Promise<void> {
+  const faces = new Set<string>();
+  if (params.lettering !== null) {
+    faces.add(params.lettering.font);
+  }
+  for (const plaque of configuredPlaques(params)) {
+    if (plaque.text !== null) {
+      faces.add(plaque.text.font);
+    }
+  }
+  await Promise.all([...faces].map((face) => ensureFont(face)));
+}
+
 export async function buildJobMesh(wasm: ManifoldToplevel, job: Job): Promise<Manifold> {
   switch (job.generator) {
     case 'base': {
+      await ensureBaseFonts(job.params);
       const font =
         job.params.lettering !== null ? await ensureFont(job.params.lettering.font) : null;
       return buildBaseSingleSolid(wasm, job.params, font);
@@ -219,24 +234,27 @@ function mergeOverlays(overlays: RawMesh[]): RawMesh | null {
 export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<JobBundle> {
   const solids: { name: string; colorHex: string; solid: Manifold; group?: string }[] = [];
   try {
-    if (job.generator === 'base' && (job.params.lettering !== null || job.params.plaque !== null)) {
+    const basePlaques = job.generator === 'base' ? configuredPlaques(job.params) : [];
+    if (job.generator === 'base' && (job.params.lettering !== null || basePlaques.length > 0)) {
       const lettering = job.params.lettering;
+      await ensureBaseFonts(job.params);
       const font = lettering !== null ? await ensureFont(lettering.font) : null;
-      if (job.params.plaque !== null) {
-        const sideLetters = lettering !== null && lettering.placement === 'side';
+      if (basePlaques.length > 0) {
         solids.push({
           name: 'body',
           colorHex: BODY_COLOR,
-          solid: buildBase(
-            wasm,
-            { ...job.params, plaque: null, lettering: sideLetters ? null : lettering },
-            sideLetters ? null : font,
-          ),
+          solid: buildBase(wasm, { ...job.params, plaque: null, plaqueBack: null }, font),
         });
-        solids.push({
-          name: 'plaque',
-          colorHex: job.params.plaque.colorHex,
-          solid: buildPlaqueSolidLettered(wasm, job.params, font),
+        buildPlaqueParts(wasm, job.params).forEach((part, index) => {
+          const name = index === 0 ? 'plaque' : 'plaque-back';
+          solids.push({ name, colorHex: part.plaque.colorHex, solid: part.solid });
+          if (part.letters !== null) {
+            solids.push({
+              name: `${name}-text`,
+              colorHex: part.plaque.text?.colorHex ?? BODY_COLOR,
+              solid: part.letters,
+            });
+          }
         });
       } else {
         solids.push({ name: 'body', colorHex: BODY_COLOR, solid: buildBase(wasm, job.params, font) });
@@ -333,38 +351,11 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
 export async function buildJobStep(job: Job): Promise<Shape3D> {
   switch (job.generator) {
     case 'base': {
-      const { applyStepLettering, buildStepLetterParts, buildStepShape } = await import(
-        '../geometry/step/buildStepShape.ts'
-      );
+      const { buildStepBaseParts } = await import('../geometry/step/buildStepBase.ts');
+      await ensureBaseFonts(job.params);
       const font =
         job.params.lettering !== null ? await ensureFont(job.params.lettering.font) : null;
-      const hasLetters = job.params.lettering !== null && font !== null;
-      const parts: Shape3D[] = [buildStepShape(job.params, font)];
-      let letterReference: Shape3D | null = null;
-      if (job.params.plaque !== null) {
-        const { buildStepPlaque } = await import('../geometry/step/buildStepPlaque.ts');
-        const { baseBottomOutline } = await import('../geometry/buildBase.ts');
-        const plaqueRaw = buildStepPlaque(job.params, baseBottomOutline(job.params));
-        if (plaqueRaw !== null) {
-          if (hasLetters) {
-            const bare = buildStepShape({ ...job.params, lettering: null });
-            letterReference = bare.fuse(plaqueRaw.clone());
-            parts.push(applyStepLettering(plaqueRaw, job.params, font));
-          } else {
-            parts.push(plaqueRaw);
-          }
-        }
-      }
-      if (hasLetters) {
-        const letters = buildStepLetterParts(
-          job.params,
-          font,
-          letterReference,
-        );
-        if (letters !== null) {
-          parts.push(letters);
-        }
-      }
+      const parts = buildStepBaseParts(job.params, font);
       if (parts.length > 1) {
         const { makeCompound } = await import('replicad');
         return makeCompound(parts) as unknown as Shape3D;

@@ -130,6 +130,15 @@ if (process.argv[2] === '--smoke') {
     placement: 'top',
     font: 'sans',
   };
+  const plaqueText = {
+    text: 'HERO',
+    sizeMm: 1.2,
+    depth: 0.6,
+    strokeBoostMm: 0,
+    style: 'engraved',
+    font: 'sans',
+    colorHex: '#e8833a',
+  };
   cases.push(
     ['lettered-top', { ...defaultParams(), shape: { kind: 'round', diameter: 40 }, lettering }],
     [
@@ -153,8 +162,16 @@ if (process.argv[2] === '--smoke') {
       {
         ...defaultParams(),
         shape: { kind: 'round', diameter: 40 },
-        plaque: { style: 'scroll', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1' },
-        lettering: { ...lettering, sizeMm: 1.2, placement: 'side' },
+        plaque: { style: 'scroll', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1', text: plaqueText },
+      },
+    ],
+    [
+      'plated-front-back',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 40 },
+        plaque: { style: 'plate', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.7, rivetHeightMm: 0.2, colorHex: '#9AA5B1', text: plaqueText },
+        plaqueBack: { style: 'scroll', widthMm: 12, heightMm: 2.4, angleDeg: 90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1', text: { ...plaqueText, text: '7' } },
       },
     ],
     [

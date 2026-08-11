@@ -13,7 +13,7 @@ import {
 import type { ResolvedShape } from './shapeMetrics.ts';
 import { inradius, pointInShape, resolveShape } from './shapeMetrics.ts';
 import type { BaseParams, FreeformSpec, MagnetParams, ShapeSpec, SlottaParams } from './types.ts';
-import { APPROX_ADVANCE_RATIO, SLOTTA_RIM } from './types.ts';
+import { APPROX_ADVANCE_RATIO, SLOTTA_RIM, configuredPlaques } from './types.ts';
 
 export interface ValidationIssue {
   code: string;
@@ -69,6 +69,11 @@ const ERROR_MAGNET_SPACING_TOO_SMALL =
 const ERROR_MAGNET_TOO_DEEP = 'The magnet depth plus padding must be smaller than the base height.';
 const ERROR_PLAQUE_DOES_NOT_FIT =
   'The plaque must fit its side: within one flat side on straight-edged bases, at most 300 degrees around on round ones, and at least 0.6 mm shorter than the base height minus the lip.';
+const ERROR_PLAQUE_EXCLUSIVE =
+  'Rim lettering and side plaques cannot be combined; put the text on the plaque instead.';
+const ERROR_PLAQUE_TEXT_INVALID =
+  'The plaque text must be at most 24 characters with positive size and depth, letters no taller than the plaque, a stroke boost up to 0.4 mm, and it must fit within the plaque width.';
+const ERROR_PLAQUE_TEXT_REQUIRES_ROUND = 'Plaque text is only supported on round bases.';
 const ERROR_PLAQUE_VALUES_INVALID =
   'The plaque width and height must be positive, the thickness between 0.2 and 2 mm, and the rivet height between 0 and 0.6 mm.';
 const ERROR_QUALITY_OUT_OF_RANGE = 'The chord tolerance must be between 0.002 mm and 0.5 mm.';
@@ -399,8 +404,11 @@ export function validate(params: BaseParams): ValidationIssue[] {
     }
   }
 
-  if (params.plaque !== null) {
-    const plaque = params.plaque;
+  const plaques = configuredPlaques(params);
+  if (plaques.length > 0 && params.lettering !== null) {
+    issues.push({ code: 'plaque-exclusive', message: ERROR_PLAQUE_EXCLUSIVE });
+  }
+  for (const plaque of plaques) {
     if (
       !(plaque.widthMm > 0) ||
       !(plaque.heightMm > 0) ||
@@ -439,6 +447,26 @@ export function validate(params: BaseParams): ValidationIssue[] {
       plaque.heightMm > params.height - params.lipRadius - 0.6
     ) {
       issues.push({ code: 'plaque-fit', message: ERROR_PLAQUE_DOES_NOT_FIT });
+    }
+    const text = plaque.text;
+    if (text !== null && text.text.trim() !== '') {
+      if (params.shape.kind !== 'round') {
+        issues.push({ code: 'plaque-text', message: ERROR_PLAQUE_TEXT_REQUIRES_ROUND });
+      } else {
+        const trimmed = text.text.trim();
+        const approxWidth = APPROX_ADVANCE_RATIO * text.sizeMm * trimmed.length;
+        if (
+          trimmed.length > 24 ||
+          !(text.sizeMm > 0) ||
+          !(text.depth > 0) ||
+          text.strokeBoostMm < 0 ||
+          text.strokeBoostMm > 0.4 ||
+          text.sizeMm * 1.25 > plaque.heightMm ||
+          approxWidth > plaque.widthMm - 1
+        ) {
+          issues.push({ code: 'plaque-text', message: ERROR_PLAQUE_TEXT_INVALID });
+        }
+      }
     }
   }
 

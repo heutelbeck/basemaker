@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { unzipSync } from 'fflate';
 import { writeThreeMfParts } from '../src/export/threeMf.ts';
 import { buildJobBundle } from '../src/generators/job.ts';
-import { buildBase, buildLetterSolids } from '../src/geometry/buildBase.ts';
+import { buildBase, buildLetterSolids, buildPlaqueParts } from '../src/geometry/buildBase.ts';
 import { initFontFromBuffer } from '../src/geometry/lettering/font.ts';
 import { textArcContours } from '../src/geometry/lettering/textOutlines.ts';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
@@ -168,6 +168,60 @@ describe('lettering styles and placements', () => {
     body.delete();
     letters.delete();
     overlap.delete();
+  });
+
+  it('plaque text letters fill the plaque engraving exactly', async () => {
+    const wasm = await getManifold();
+    const plaque = {
+      style: 'plate' as const,
+      widthMm: 16,
+      heightMm: 2.6,
+      angleDeg: -90,
+      thicknessMm: 0.7,
+      rivetHeightMm: 0.2,
+      colorHex: '#9AA5B1',
+      text: {
+        text: 'HERO',
+        sizeMm: 1.2,
+        depth: 0.6,
+        strokeBoostMm: 0,
+        style: 'engraved' as const,
+        font: 'sans',
+        colorHex: '#e8833a',
+      },
+    };
+    const plain = buildPlaqueParts(wasm, params({ plaque: { ...plaque, text: null } }));
+    const lettered = buildPlaqueParts(wasm, params({ plaque }));
+    const letters = lettered[0].letters;
+    expect(letters).not.toBeNull();
+    if (letters !== null) {
+      expect(letters.volume()).toBeGreaterThan(0);
+      expect(lettered[0].solid.volume() + letters.volume()).toBeCloseTo(
+        plain[0].solid.volume(),
+        1,
+      );
+      letters.delete();
+    }
+    plain[0].solid.delete();
+    lettered[0].solid.delete();
+  });
+
+  it('handles spaces in the text on every placement', async () => {
+    const wasm = await getManifold();
+    const spaced = lettering({ text: 'SIR HECTOR', sizeMm: 1.2, placement: 'side' });
+    const side = buildBase(wasm, params({ lettering: spaced }), font);
+    const top = buildBase(
+      wasm,
+      params({ lettering: lettering({ text: 'SIR HECTOR', placement: 'top' }) }),
+      font,
+    );
+    const letters = buildLetterSolids(wasm, params({ lettering: spaced }), font);
+    expect(side.status()).toBe('NoError');
+    expect(top.status()).toBe('NoError');
+    expect(letters.volume()).toBeGreaterThan(0);
+    side.delete();
+    top.delete();
+    letters.delete();
   });
 
   it('renders each font face with distinct geometry', async () => {

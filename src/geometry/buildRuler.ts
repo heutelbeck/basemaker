@@ -59,9 +59,7 @@ function roundedRect(
   width: number,
   radius: number,
 ): CrossSection {
-  const core = track(
-    wasm.CrossSection.square([length - 2 * radius, width - 2 * radius], true),
-  );
+  const core = track(wasm.CrossSection.square([length - 2 * radius, width - 2 * radius], true));
   return track(core.offset(radius, 'Round', 2, 32));
 }
 
@@ -82,14 +80,16 @@ function glyphSections(
   text: string,
   sizeMm: number,
 ): CrossSection[] {
-  return textLineContourGroups(font, text, sizeMm).map((group) =>
-    track(
-      wasm.CrossSection.ofPolygons(
-        group.map((contour) => contour.points),
-        'EvenOdd',
+  return textLineContourGroups(font, text, sizeMm)
+    .filter((group) => group.length > 0)
+    .map((group) =>
+      track(
+        wasm.CrossSection.ofPolygons(
+          group.map((contour) => contour.points),
+          'EvenOdd',
+        ),
       ),
-    ),
-  );
+    );
 }
 
 /**
@@ -232,16 +232,20 @@ function buildStick(
   } else {
     const edges = [-length / 2, ...cutXs, length / 2];
     for (let i = 0; i + 1 < edges.length; i++) {
-      const band = track(
-        wasm.CrossSection.square([edges[i + 1] - edges[i], width + 4], true),
-      );
+      const band = track(wasm.CrossSection.square([edges[i + 1] - edges[i], width + 4], true));
       let piece = track(outline.intersect(track(band.translate((edges[i] + edges[i + 1]) / 2, 0))));
       if (i + 1 < edges.length - 1) {
         const tab = dovetailSection(wasm, track, edges[i + 1], 0);
         piece = track(piece.add(track(tab.intersect(outline))));
       }
       if (i > 0) {
-        const slot = dovetailSection(wasm, track, edges[i], DOVETAIL_CLEARANCE, DOVETAIL_TIP_RELIEF);
+        const slot = dovetailSection(
+          wasm,
+          track,
+          edges[i],
+          DOVETAIL_CLEARANCE,
+          DOVETAIL_TIP_RELIEF,
+        );
         piece = track(piece.subtract(slot));
       }
       bodySections.push(piece);
@@ -365,11 +369,12 @@ function buildChain(
     joined = track(joined.add(track(cap.translate(x, y, capTop - RIVET_CAP_HEIGHT))));
     const slitBottom = tailT + RIVET_SLIT_ROOT;
     const slit = track(
-      wasm.Manifold.cube([RIVET_SLIT_WIDTH, 2 * RIVET_CAP_RADIUS + 2, capTop - slitBottom + 0.02], true),
+      wasm.Manifold.cube(
+        [RIVET_SLIT_WIDTH, 2 * RIVET_CAP_RADIUS + 2, capTop - slitBottom + 0.02],
+        true,
+      ),
     );
-    return track(
-      joined.subtract(track(slit.translate(x, y, (slitBottom + capTop) / 2 + 0.01))),
-    );
+    return track(joined.subtract(track(slit.translate(x, y, (slitBottom + capTop) / 2 + 0.01))));
   };
   const addTailPocket = (solid: Manifold, x: number, y: number): Manifold => {
     const pocket = track(
@@ -422,9 +427,7 @@ function buildChain(
         const pocket = track(
           wasm.Manifold.cylinder(magnetPocketDepth + 0.01, pocketRadius, pocketRadius, 32, false),
         );
-        body = track(
-          body.subtract(track(pocket.translate(localX, 0, pocketH - 0.01))),
-        );
+        body = track(body.subtract(track(pocket.translate(localX, 0, pocketH - 0.01))));
       } else {
         const holeRadius = PIN_RADIUS + RIVET_RUN_CLEARANCE;
         const hole = track(
@@ -435,9 +438,7 @@ function buildChain(
         const bore = track(
           wasm.Manifold.cylinder(RIVET_BORE_DEPTH + 0.01, boreRadius, boreRadius, 32, false),
         );
-        body = track(
-          body.subtract(track(bore.translate(localX, 0, thickness - RIVET_BORE_DEPTH))),
-        );
+        body = track(body.subtract(track(bore.translate(localX, 0, thickness - RIVET_BORE_DEPTH))));
       }
     }
 
@@ -492,7 +493,12 @@ function buildChain(
         group,
       });
     } else {
-      parts.push({ name: `link${suffix}`, solid: body.translate(0, rowY, 0), accent: false, group });
+      parts.push({
+        name: `link${suffix}`,
+        solid: body.translate(0, rowY, 0),
+        accent: false,
+        group,
+      });
     }
   }
 

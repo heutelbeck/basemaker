@@ -18,6 +18,7 @@ function plaque(overrides: Partial<PlaqueParams> = {}): PlaqueParams {
     thicknessMm: 0.7,
     rivetHeightMm: 0.2,
     colorHex: '#9AA5B1',
+    text: null,
     ...overrides,
   };
 }
@@ -81,6 +82,63 @@ describe('side plaques', () => {
       expect(box.min[2]).toBeGreaterThanOrEqual(-1e-6);
       solid.delete();
     }
+  });
+
+  it('adds an independently configured second plaque on the opposite side', async () => {
+    const wasm = await getManifold();
+    const single = buildBase(wasm, params({ plaque: plaque() }));
+    const double = buildBase(
+      wasm,
+      params({
+        plaque: plaque(),
+        plaqueBack: plaque({ angleDeg: 90, widthMm: 12, heightMm: 2.2 }),
+      }),
+    );
+    expect(double.status()).toBe('NoError');
+    expect(double.volume()).toBeGreaterThan(single.volume());
+    const singleBox = single.boundingBox();
+    const doubleBox = double.boundingBox();
+    expect(doubleBox.max[1]).toBeGreaterThan(singleBox.max[1] + 0.25);
+    single.delete();
+    double.delete();
+  });
+
+  it('rejects combining rim lettering with plaques and validates plaque text', () => {
+    const combined = params({
+      plaque: plaque(),
+      lettering: {
+        text: 'HERO',
+        sizeMm: 1.2,
+        depth: 0.6,
+        margin: 2,
+        angleDeg: -90,
+        colorHex: '#e8833a',
+        strokeBoostMm: 0,
+        style: 'engraved',
+        placement: 'side',
+        font: 'sans',
+      },
+    });
+    expect(validate(combined).map((issue) => issue.code)).toContain('plaque-exclusive');
+    const text = {
+      text: '7',
+      sizeMm: 1.2,
+      depth: 0.6,
+      strokeBoostMm: 0,
+      style: 'engraved' as const,
+      font: 'sans',
+      colorHex: '#e8833a',
+    };
+    expect(validate(params({ plaque: plaque({ text }) }))).toEqual([]);
+    const tooLong = params({
+      plaque: plaque({ text: { ...text, text: 'FARTOOLONGFORTHEPLAQUE' } }),
+    });
+    expect(validate(tooLong).map((issue) => issue.code)).toContain('plaque-text');
+    const nonRound = params({
+      shape: { kind: 'square', size: 30 },
+      plaque: plaque({ text }),
+    });
+    expect(validate(nonRound).map((issue) => issue.code)).toContain('plaque-text');
   });
 
   it('limits straight-edged plaques to one flat side and rejects oversized plaques', () => {
