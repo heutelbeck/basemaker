@@ -8,7 +8,7 @@ import { hexOutline } from '../../params/tessellation.ts';
 import type { Vec } from '../../params/polygon.ts';
 import type { ResolvedShape } from '../../params/shapeMetrics.ts';
 import { resolveShape } from '../../params/shapeMetrics.ts';
-import { arcPointAt, lipShape, topInsetFor } from '../../params/edgeProfile.ts';
+import { arcPointAt, lipShape, profileInsetAt, topInsetFor } from '../../params/edgeProfile.ts';
 import { supportPillarCenters } from '../../params/supports.ts';
 import type { BaseParams, MagnetParams } from '../../params/types.ts';
 import { SLOTTA_RIM } from '../../params/types.ts';
@@ -78,10 +78,18 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
 
   if (params.hollow !== null) {
     const ceiling = params.height - params.hollow.topThickness;
-    const slopeInsetAtCeiling = (params.edgeSlope * ceiling) / params.height;
+    const wallProfile = {
+      height: params.height,
+      edgeSlope: params.edgeSlope,
+      lipRadius: params.lipRadius,
+      lipTopRadius: params.lipTopRadius,
+      topInset,
+      samples: [],
+    };
+    const insetAtCeiling = profileInsetAt(wallProfile, ceiling);
     const cavity = asShape3D(
       bottom
-        .offset(-(slopeInsetAtCeiling + params.hollow.wall))
+        .offset(-(insetAtCeiling + params.hollow.wall))
         .sketchOnPlane('XY', -CUT_EPSILON)
         .extrude(ceiling + CUT_EPSILON),
     );
@@ -105,11 +113,13 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
       solid = asShape3D(solid.fuse(clipped));
     }
     if (params.hollow.supports !== null) {
+      // Supports only need to reach the cavity ceiling; extruding to the
+      // full height would poke through walls that curve inward above it.
+      const supportHeight = ceiling + 0.2;
       if (params.hollow.supports.style === 'grid') {
         const thickness = params.hollow.supports.diameter;
         const spacing = params.hollow.supports.spacing;
-        const ceiling = params.height - params.hollow.topThickness;
-        const innerInset = (params.edgeSlope * ceiling) / params.height + params.hollow.wall + 1;
+        const innerInset = insetAtCeiling + params.hollow.wall + 1;
         const inner = bottom.offset(-innerInset);
         const span = Math.max(params.height, topInset) + 200;
         const steps = Math.floor(span / spacing);
@@ -120,7 +130,7 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
               : drawRectangle(span * 2, thickness).translate(0, i * spacing);
             const clipped = rib.intersect(inner);
             try {
-              const solidRib = asShape3D(clipped.sketchOnPlane('XY').extrude(params.height));
+              const solidRib = asShape3D(clipped.sketchOnPlane('XY').extrude(supportHeight));
               solid = asShape3D(solid.fuse(solidRib));
             } catch {
               // A rib entirely outside the cavity produces an empty
@@ -133,7 +143,7 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
         const radius = params.hollow.supports.diameter / 2;
         for (const [x, y] of supportPillarCenters(params)) {
           const pillar = asShape3D(
-            drawCircle(radius).translate(x, y).sketchOnPlane('XY').extrude(params.height),
+            drawCircle(radius).translate(x, y).sketchOnPlane('XY').extrude(supportHeight),
           );
           solid = asShape3D(solid.fuse(pillar));
         }

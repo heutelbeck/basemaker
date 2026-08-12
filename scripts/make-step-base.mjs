@@ -175,7 +175,7 @@ if (process.argv[2] === '--smoke') {
         lipRadius: 4.8,
         lipTopRadius: 1.4,
         recess: { depth: 0.5, inset: 0.35 },
-        hollow: { wall: 1.1, topThickness: 2, supports: null },
+        hollow: { wall: 1.1, topThickness: 2, supports: { style: 'grid', spacing: 8, diameter: 1.2 } },
       },
     ],
     [

@@ -80,9 +80,12 @@ export function buildBase(
         } else {
           const radius = params.hollow.supports.diameter / 2;
           const segments = segmentsFor(radius, tol);
+          // Pillars only need to reach the cavity ceiling; a full-height
+          // pillar would poke through walls that curve inward above it.
+          const pillarHeight = params.height - params.hollow.topThickness + 0.2;
           const pillars = supportPillarCenters(params).map(([x, y]) => {
             const pillar = track(
-              wasm.Manifold.cylinder(params.height, radius, radius, segments, false),
+              wasm.Manifold.cylinder(pillarHeight, radius, radius, segments, false),
             );
             return track(pillar.translate(x, y, 0));
           });
