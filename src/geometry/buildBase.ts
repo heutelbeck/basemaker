@@ -10,8 +10,10 @@ import { configuredPlaques, plaqueVariants } from '../params/types.ts';
 import { fontFor } from './lettering/font.ts';
 import { withGeometryScope } from './dispose.ts';
 import { converterInsertCutter } from './features/converter.ts';
+import { facingMarkerCutter } from './features/facingMarkers.ts';
 import { letteringCutter, letteringSolids } from './features/lettering.ts';
 import { magnetHousings, magnetSlotCutters } from './features/magnets.ts';
+import { mountingHoleCutters, mountingHoleHousings } from './features/mountingHoles.ts';
 import { recessCutter } from './features/recess.ts';
 import { buildHollowCavity, buildShellSolid, hollowInnerOutline, shellOutlines } from './features/shell.ts';
 import { slottaCutter, slottaHousing } from './features/slotta.ts';
@@ -59,6 +61,17 @@ export function buildBase(
       if (params.slotta !== null) {
         const housing = slottaHousing(wasm, track, params.slotta, params.height);
         const clipped = track(housing.intersect(outer));
+        solid = track(solid.add(clipped));
+      }
+      if (params.mountingHoles !== null && params.mountingHoles.holes.length > 0) {
+        const housings = mountingHoleHousings(
+          wasm,
+          track,
+          params.mountingHoles.holes,
+          params.height,
+          tol,
+        );
+        const clipped = track(housings.intersect(outer));
         solid = track(solid.add(clipped));
       }
       if (params.hollow.supports !== null) {
@@ -120,8 +133,16 @@ export function buildBase(
     if (params.slotta !== null) {
       cutters.push(slottaCutter(wasm, track, params.slotta, params.height));
     }
+    if (params.mountingHoles !== null && params.mountingHoles.holes.length > 0) {
+      cutters.push(
+        ...mountingHoleCutters(wasm, track, params.mountingHoles.holes, params.height, tol),
+      );
+    }
     if (params.shape.kind === 'converter') {
       cutters.push(converterInsertCutter(wasm, track, params.shape, params.height, tol));
+    }
+    if (params.facingMarkers !== null && params.facingMarkers.markers.length > 0) {
+      cutters.push(facingMarkerCutter(wasm, track, params, bottomOutline, profile));
     }
     if (params.lettering !== null && font !== null) {
       const cutter = letteringCutter(wasm, track, font, params);

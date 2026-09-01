@@ -11,9 +11,11 @@ import { AdapterTrayPanel, MovementTrayPanel } from './ui/panels/TrayPanels.tsx'
 import { BodyPanel } from './ui/panels/BodyPanel.tsx';
 import { CollectionPanel } from './ui/panels/CollectionPanel.tsx';
 import { ExportPanel } from './ui/panels/ExportPanel.tsx';
+import { FacingMarkersPanel } from './ui/panels/FacingMarkersPanel.tsx';
 import { LetteringPanel, SidePlaquePanel } from './ui/panels/LetteringPanel.tsx';
 import { LibraryPanel } from './ui/panels/LibraryPanel.tsx';
 import { MagnetsPanel } from './ui/panels/MagnetsPanel.tsx';
+import { MountingHolesPanel } from './ui/panels/MountingHolesPanel.tsx';
 import { RecessPanel } from './ui/panels/RecessPanel.tsx';
 import { ShapePanel } from './ui/panels/ShapePanel.tsx';
 import { SlottaPanel } from './ui/panels/SlottaPanel.tsx';
@@ -58,6 +60,8 @@ export function App() {
             <MagnetsPanel />
             <RecessPanel />
             <SlottaPanel />
+            <MountingHolesPanel />
+            <FacingMarkersPanel />
             <SurfacePanel />
             <LetteringPanel />
             <SidePlaquePanel />

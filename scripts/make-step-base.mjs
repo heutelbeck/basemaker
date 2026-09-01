@@ -117,6 +117,81 @@ if (process.argv[2] === '--smoke') {
         height: 5,
       },
     ],
+    [
+      'mounting-holes-hex',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 40 },
+        hollow: { wall: 1.1, topThickness: 1, supports: null },
+        mountingHoles: {
+          holes: [
+            { shape: 'hex', sizeMm: 5, offsetX: 0, offsetY: 0, rotationDeg: 0, rimMm: 1.5 },
+          ],
+        },
+      },
+    ],
+    [
+      'mounting-holes-twin',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 40 },
+        mountingHoles: {
+          holes: [
+            { shape: 'round', sizeMm: 5, offsetX: -8, offsetY: 0, rotationDeg: 0, rimMm: 1.5 },
+            { shape: 'round', sizeMm: 5, offsetX: 8, offsetY: 0, rotationDeg: 0, rimMm: 1.5 },
+          ],
+        },
+      },
+    ],
+    [
+      'facing-markers',
+      {
+        ...defaultParams(),
+        facingMarkers: {
+          depth: 0.4,
+          markers: [
+            { angleDeg: 0, style: 'topNotch', widthMm: 2.5, lineWidthMm: 0.8 },
+            { angleDeg: 90, style: 'triangleUp', widthMm: 2.5, lineWidthMm: 0.8 },
+            { angleDeg: 180, style: 'bottomNotch', widthMm: 2.5, lineWidthMm: 0.8 },
+            { angleDeg: 235, style: 'line', widthMm: 0.8, lineWidthMm: 0.8 },
+            { angleDeg: 305, style: 'triangleDown', widthMm: 2.5, lineWidthMm: 0.8 },
+          ],
+        },
+      },
+    ],
+    [
+      'facing-markers-square',
+      {
+        ...defaultParams(),
+        shape: { kind: 'square', size: 40 },
+        facingMarkers: {
+          depth: 0.4,
+          markers: [
+            { angleDeg: 0, style: 'line', widthMm: 0.8, lineWidthMm: 0.8 },
+            { angleDeg: 90, style: 'triangleUp', widthMm: 2.5, lineWidthMm: 0.8 },
+            { angleDeg: 180, style: 'line', widthMm: 0.8, lineWidthMm: 0.8 },
+          ],
+        },
+      },
+    ],
+    [
+      'facing-markers-lipped',
+      {
+        ...defaultParams(),
+        shape: { kind: 'round', diameter: 30 },
+        height: 4.45,
+        edgeSlope: 0,
+        lipRadius: 4.75,
+        lipTopRadius: 0.3,
+        facingMarkers: {
+          depth: 0.4,
+          markers: [
+            { angleDeg: 0, style: 'line', widthMm: 0.8, lineWidthMm: 0.8 },
+            { angleDeg: 180, style: 'line', widthMm: 0.8, lineWidthMm: 0.8 },
+          ],
+        },
+      },
+    ],
   ];
   const lettering = {
     text: 'HERO',

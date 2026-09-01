@@ -83,6 +83,13 @@ function migrate(entry: StoredEntry): SavedBase {
     if (migrated.job.params.magnets !== null) {
       migrated.job.params.magnets.layout ??= 'line';
     }
+    migrated.job.params.mountingHoles ??= null;
+    migrated.job.params.facingMarkers ??= null;
+    if (migrated.job.params.facingMarkers !== null) {
+      for (const marker of migrated.job.params.facingMarkers.markers) {
+        marker.lineWidthMm ??= 0.8;
+      }
+    }
     migrated.job.params.lettering ??= null;
     migrated.job.params.plaque ??= null;
     migrated.job.params.plaqueBack ??= null;

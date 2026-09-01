@@ -1,3 +1,5 @@
+import type { FacingMarkerParams } from './facingMarkers.ts';
+import type { MountingHoleParams } from './mountingHoles.ts';
 import type { SurfaceParams } from './surface.ts';
 
 export type GwOvalPreset = '60x35' | '75x42' | '90x52' | '105x70' | '120x92' | '170x105';
@@ -165,6 +167,8 @@ export interface BaseParams {
   magnets: MagnetParams | null;
   recess: RecessParams | null;
   slotta: SlottaParams | null;
+  mountingHoles: MountingHoleParams | null;
+  facingMarkers: FacingMarkerParams | null;
   lettering: LetteringParams | null;
   plaque: PlaqueParams | null;
   plaqueBack: PlaqueParams | null;
@@ -259,6 +263,8 @@ export function defaultParams(): BaseParams {
     magnets: null,
     recess: null,
     slotta: null,
+    mountingHoles: null,
+    facingMarkers: null,
     lettering: null,
     plaque: null,
     plaqueBack: null,

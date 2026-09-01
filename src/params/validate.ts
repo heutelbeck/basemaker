@@ -12,6 +12,8 @@ import {
 } from './polygon.ts';
 import type { ResolvedShape } from './shapeMetrics.ts';
 import { inradius, pointInShape, resolveShape } from './shapeMetrics.ts';
+import type { MountingHoleSpec } from './mountingHoles.ts';
+import { holeCircumradius } from './mountingHoles.ts';
 import type { BaseParams, FreeformSpec, MagnetParams, ShapeSpec, SlottaParams } from './types.ts';
 import { APPROX_ADVANCE_RATIO, SLOTTA_RIM, configuredPlaques } from './types.ts';
 
@@ -34,6 +36,10 @@ const ERROR_CONVERTER_INSERT_TOO_LARGE = `The insert shape plus clearance does n
 const ERROR_EDGE_SLOPE_NEGATIVE = 'The edge slope must not be negative.';
 const ERROR_EDGE_SLOPE_TOO_LARGE =
   'The edge slope must be smaller than half the smallest footprint dimension.';
+const ERROR_FACING_MARKER_DEPTH_INVALID =
+  'The facing marker depth must be positive and leave material behind the engraving.';
+const ERROR_FACING_MARKER_WIDTH_INVALID =
+  'Each facing marker needs a width and a line width between 0.2 mm and 20 mm.';
 const ERROR_FREEFORM_POINTS_INVALID =
   'A freeform shape needs at least three points, or one circle with a positive radius.';
 const ERROR_FREEFORM_SELF_INTERSECTING = 'The freeform outline must not intersect itself.';
@@ -69,6 +75,12 @@ const ERROR_MAGNET_OUTSIDE_FOOTPRINT =
 const ERROR_MAGNET_SPACING_TOO_SMALL =
   'The magnet spacing must be at least the magnet footprint size.';
 const ERROR_MAGNET_TOO_DEEP = 'The magnet depth plus padding must be smaller than the base height.';
+const ERROR_MOUNTING_HOLE_FIT =
+  'A mounting hole including its rim does not fit inside the top face of the base.';
+const ERROR_MOUNTING_HOLE_OVERLAP =
+  'Mounting holes including their rims must not overlap each other, magnet slots, or the slotta slot.';
+const ERROR_MOUNTING_HOLE_VALUES =
+  'Each mounting hole needs a positive size and a rim between 0.8 mm and 5 mm.';
 const ERROR_PLAQUE_DOES_NOT_FIT =
   'The plaque must fit its side: within one flat side on straight-edged bases, at most 300 degrees around on round ones, and at least 0.6 mm shorter than the base height minus the lip.';
 const ERROR_PLAQUE_EXCLUSIVE =
@@ -336,6 +348,50 @@ export function validate(params: BaseParams): ValidationIssue[] {
     }
   }
 
+  if (params.mountingHoles !== null) {
+    const holes = params.mountingHoles.holes;
+    if (!holes.every((hole) => hole.sizeMm > 0 && hole.rimMm >= 0.8 && hole.rimMm <= 5)) {
+      issues.push({ code: 'mounting-hole-values', message: ERROR_MOUNTING_HOLE_VALUES });
+    } else {
+      const fits = holes.every((hole) => {
+        const reach = holeCircumradius(hole) + hole.rimMm;
+        for (let i = 0; i < 8; i++) {
+          const angle = (Math.PI * i) / 4;
+          const px = hole.offsetX + reach * Math.cos(angle);
+          const py = hole.offsetY + reach * Math.sin(angle);
+          if (!footprint.contains(px, py, topInset)) {
+            return false;
+          }
+        }
+        return true;
+      });
+      if (!fits) {
+        issues.push({ code: 'mounting-hole-fit', message: ERROR_MOUNTING_HOLE_FIT });
+      }
+      if (mountingHolesOverlap(holes, params)) {
+        issues.push({ code: 'mounting-hole-overlap', message: ERROR_MOUNTING_HOLE_OVERLAP });
+      }
+    }
+  }
+
+  if (params.facingMarkers !== null) {
+    const markerDepthLimit = hollow !== null ? hollow.wall : rIn / 4;
+    if (!(params.facingMarkers.depth > 0) || params.facingMarkers.depth >= markerDepthLimit) {
+      issues.push({ code: 'facing-marker-depth', message: ERROR_FACING_MARKER_DEPTH_INVALID });
+    }
+    const widthsValid = params.facingMarkers.markers.every(
+      (marker) =>
+        marker.widthMm >= 0.2 &&
+        marker.widthMm <= 20 &&
+        marker.lineWidthMm >= 0.2 &&
+        marker.lineWidthMm <= 20 &&
+        Number.isFinite(marker.angleDeg),
+    );
+    if (!widthsValid) {
+      issues.push({ code: 'facing-marker-width', message: ERROR_FACING_MARKER_WIDTH_INVALID });
+    }
+  }
+
   if (params.lettering !== null) {
     const lettering = params.lettering;
     if (params.shape.kind !== 'round') {
@@ -489,6 +545,61 @@ export function validate(params: BaseParams): ValidationIssue[] {
   }
 
   return issues;
+}
+
+/**
+ * Tests whether any mounting hole, grown by its rim, touches another
+ * hole, a magnet slot grown by its padding, or the slotta slot grown by
+ * its housing rim. All footprints are compared as bounding circles.
+ */
+function mountingHolesOverlap(holes: MountingHoleSpec[], params: BaseParams): boolean {
+  const reaches = holes.map((hole) => holeCircumradius(hole) + hole.rimMm);
+  for (let i = 0; i < holes.length; i++) {
+    for (let j = i + 1; j < holes.length; j++) {
+      const distance = Math.hypot(
+        holes[i].offsetX - holes[j].offsetX,
+        holes[i].offsetY - holes[j].offsetY,
+      );
+      if (distance < reaches[i] + reaches[j]) {
+        return true;
+      }
+    }
+  }
+  const magnets = params.magnets;
+  if (magnets !== null) {
+    const magnetReach =
+      (magnets.shape === 'round' ? magnets.diameter : Math.hypot(magnets.length, magnets.width)) /
+        2 +
+      magnets.padding;
+    const centers = magnetCenters(params);
+    const touchesMagnet = holes.some((hole, index) =>
+      centers.some(
+        ([cx, cy]) =>
+          Math.hypot(hole.offsetX - cx, hole.offsetY - cy) < reaches[index] + magnetReach,
+      ),
+    );
+    if (touchesMagnet) {
+      return true;
+    }
+  }
+  const slotta = params.slotta;
+  if (slotta !== null) {
+    const angle = (-slotta.angleDeg * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const halfLength = slotta.length / 2 + SLOTTA_RIM;
+    const halfWidth = slotta.width / 2 + SLOTTA_RIM;
+    return holes.some((hole, index) => {
+      const dx = hole.offsetX - slotta.offsetX;
+      const dy = hole.offsetY - slotta.offsetY;
+      const localX = dx * cos - dy * sin;
+      const localY = dx * sin + dy * cos;
+      const nearestX = Math.min(Math.max(localX, -halfLength), halfLength);
+      const nearestY = Math.min(Math.max(localY, -halfWidth), halfWidth);
+      return Math.hypot(localX - nearestX, localY - nearestY) < reaches[index];
+    });
+  }
+  return false;
 }
 
 /**

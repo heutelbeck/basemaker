@@ -1,3 +1,6 @@
+import type { FacingMarkerParams } from '../params/facingMarkers.ts';
+import { frontArcMarkers } from '../params/facingMarkers.ts';
+import { gwHexPegHole, gwTwinPegHoles } from '../params/mountingHoles.ts';
 import { defaultAdapterTrayParams, defaultMovementTrayParams } from '../params/trays.ts';
 import type { BaseParams, ShapeSpec } from '../params/types.ts';
 import { defaultParams } from '../params/types.ts';
@@ -8,7 +11,8 @@ export type GameSystem =
   | 'Age of Sigmar'
   | 'The Old World'
   | 'Warhammer Fantasy (legacy)'
-  | 'Warmachine & Hordes';
+  | 'Warmachine & Hordes'
+  | 'Infinity';
 
 export interface LibraryEntry {
   system: GameSystem;
@@ -144,7 +148,7 @@ const WARMACHINE_SPECS: Record<number, LippedSpec> = {
   },
 };
 
-function lippedRoundBase(diameter: number): Job {
+function lippedRoundBase(diameter: number, overrides: Partial<BaseParams> = {}): Job {
   const spec = WARMACHINE_SPECS[diameter];
   return {
     generator: 'base',
@@ -158,8 +162,35 @@ function lippedRoundBase(diameter: number): Job {
       recess: { depth: spec.recessDepth, inset: spec.recessInset },
       hollow: { wall: 1.1, topThickness: 2, supports: null },
       quality: { chordTolMm: 0.001 },
+      ...overrides,
     },
   };
+}
+
+// Warmachine facing: the front arc is the 180 degrees ahead of the side
+// diameter, and back strikes need the attacker in the rear arc, so the
+// common table practice marks the two arc boundary points with thin
+// lines; the grooves run over the rolled lip and stay readable from
+// above. Front faces +Y.
+function warmachineArcMarkers(): FacingMarkerParams {
+  return {
+    depth: 0.4,
+    markers: [
+      { angleDeg: 0, style: 'line', widthMm: 2.5, lineWidthMm: 0.8 },
+      { angleDeg: 180, style: 'line', widthMm: 2.5, lineWidthMm: 0.8 },
+    ],
+  };
+}
+
+// Infinity official sizes per the N4/N5 silhouette table: 25 mm rounds
+// for S1-S2 infantry, 40 mm for S3 bikes and S5-S6 remotes, 55 mm for
+// S4 and S7 TAGs, 70 mm for S8. The rules give troopers a 180 degree
+// line-of-fire arc matching the front half of the base and ask players
+// to mark the limits of that arc on the base, so the marked variants
+// carry the two arc boundary notches on the side diameter plus a
+// front-center triangle pointing along +Y.
+function infinityBase(diameter: number, marked: boolean): Job {
+  return roundBase(diameter, marked ? { facingMarkers: frontArcMarkers() } : {});
 }
 
 function adapterTray(donor: ShapeSpec, target: ShapeSpec, cols: number, rows: number): Job {
@@ -206,8 +237,38 @@ function skirmishTray(pocketShape: ShapeSpec, cols: number, rows: number, gap: n
   };
 }
 
+// The push-fit bases of the Leviathan (2023) and Armageddon (2026)
+// launch boxes carry peg holes: small infantry bases a centered hex
+// hole, larger bases two round holes side by side. GW publishes no
+// drawings, so the hole sizes and spacing are estimates to verify
+// against an original base; every value is editable after loading.
 export const GAME_LIBRARY: LibraryEntry[] = [
   { system: 'Warhammer 40k', name: 'Infantry 25 mm', job: roundBase(25) },
+  {
+    system: 'Warhammer 40k',
+    name: 'Infantry 25 mm, hex peg hole (Leviathan / Armageddon)',
+    job: roundBase(25, { mountingHoles: gwHexPegHole() }),
+  },
+  {
+    system: 'Warhammer 40k',
+    name: 'Infantry 28.5 mm, hex peg hole (Leviathan / Armageddon)',
+    job: roundBase(28.5, { mountingHoles: gwHexPegHole() }),
+  },
+  {
+    system: 'Warhammer 40k',
+    name: 'Infantry 32 mm, hex peg hole (Leviathan / Armageddon)',
+    job: roundBase(32, { mountingHoles: gwHexPegHole() }),
+  },
+  {
+    system: 'Warhammer 40k',
+    name: 'Terminator 40 mm, two peg holes (Leviathan / Armageddon)',
+    job: roundBase(40, { mountingHoles: gwTwinPegHoles() }),
+  },
+  {
+    system: 'Warhammer 40k',
+    name: 'Heavy 50 mm, two peg holes (Leviathan / Armageddon)',
+    job: roundBase(50, { mountingHoles: gwTwinPegHoles() }),
+  },
   { system: 'Warhammer 40k', name: 'Infantry 28.5 mm', job: roundBase(28.5) },
   { system: 'Warhammer 40k', name: 'Primaris 32 mm', job: roundBase(32) },
   { system: 'Warhammer 40k', name: 'Terminator / Gravis 40 mm', job: roundBase(40) },
@@ -443,6 +504,51 @@ export const GAME_LIBRARY: LibraryEntry[] = [
   { system: 'Warmachine & Hordes', name: 'Large 50 mm', job: lippedRoundBase(50) },
   { system: 'Warmachine & Hordes', name: 'Extra large 80 mm (MK IV)', job: lippedRoundBase(80) },
   { system: 'Warmachine & Hordes', name: 'Huge 120 mm', job: lippedRoundBase(120) },
+  {
+    system: 'Warmachine & Hordes',
+    name: 'Small 30 mm, front arc marked',
+    job: lippedRoundBase(30, { facingMarkers: warmachineArcMarkers() }),
+  },
+  {
+    system: 'Warmachine & Hordes',
+    name: 'Medium 40 mm, front arc marked',
+    job: lippedRoundBase(40, { facingMarkers: warmachineArcMarkers() }),
+  },
+  {
+    system: 'Warmachine & Hordes',
+    name: 'Large 50 mm, front arc marked',
+    job: lippedRoundBase(50, { facingMarkers: warmachineArcMarkers() }),
+  },
+  {
+    system: 'Warmachine & Hordes',
+    name: 'Extra large 80 mm (MK IV), front arc marked',
+    job: lippedRoundBase(80, { facingMarkers: warmachineArcMarkers() }),
+  },
+  {
+    system: 'Warmachine & Hordes',
+    name: 'Huge 120 mm, front arc marked',
+    job: lippedRoundBase(120, { facingMarkers: warmachineArcMarkers() }),
+  },
+  { system: 'Infinity', name: 'Infantry 25 mm (S1-S2)', job: infinityBase(25, false) },
+  {
+    system: 'Infinity',
+    name: 'Infantry 25 mm (S1-S2), LoF arc marked',
+    job: infinityBase(25, true),
+  },
+  { system: 'Infinity', name: 'Bike / remote 40 mm (S3, S5-S6)', job: infinityBase(40, false) },
+  {
+    system: 'Infinity',
+    name: 'Bike / remote 40 mm (S3, S5-S6), LoF arc marked',
+    job: infinityBase(40, true),
+  },
+  { system: 'Infinity', name: 'TAG / heavy remote 55 mm (S4, S7)', job: infinityBase(55, false) },
+  {
+    system: 'Infinity',
+    name: 'TAG / heavy remote 55 mm (S4, S7), LoF arc marked',
+    job: infinityBase(55, true),
+  },
+  { system: 'Infinity', name: 'Huge TAG 70 mm (S8)', job: infinityBase(70, false) },
+  { system: 'Infinity', name: 'Huge TAG 70 mm (S8), LoF arc marked', job: infinityBase(70, true) },
 ];
 
 export const GAME_SYSTEMS: GameSystem[] = [
@@ -451,6 +557,7 @@ export const GAME_SYSTEMS: GameSystem[] = [
   'The Old World',
   'Warhammer Fantasy (legacy)',
   'Warmachine & Hordes',
+  'Infinity',
 ];
 
 export function libraryFor(system: GameSystem): LibraryEntry[] {

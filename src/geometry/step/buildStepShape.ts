@@ -3,13 +3,15 @@ import type { Drawing, Shape3D, Sketch } from 'replicad';
 import { draw, drawCircle, drawEllipse, drawRectangle, drawRoundedRectangle } from 'replicad';
 import { letteringBaselineRadius, sideWallGeometry } from '../features/lettering.ts';
 import { glyphVerticalCenter, layoutGlyphsOnArc, textArcContourGroups } from '../lettering/textOutlines.ts';
+import { markerProfilePolygons } from '../../params/facingMarkers.ts';
 import { freeformOutline } from '../../params/freeform.ts';
-import { hexOutline } from '../../params/tessellation.ts';
+import { hexOutline, outlineFor } from '../../params/tessellation.ts';
 import type { Vec } from '../../params/polygon.ts';
 import type { ResolvedShape } from '../../params/shapeMetrics.ts';
 import { resolveShape } from '../../params/shapeMetrics.ts';
 import { arcPointAt, lipShape, profileInsetAt, topInsetFor } from '../../params/edgeProfile.ts';
 import { supportPillarCenters } from '../../params/supports.ts';
+import type { MountingHoleSpec } from '../../params/mountingHoles.ts';
 import type { BaseParams, MagnetParams } from '../../params/types.ts';
 import { SLOTTA_RIM } from '../../params/types.ts';
 import { magnetCenters } from '../../params/magnetLayout.ts';
@@ -26,54 +28,15 @@ const ERROR_UNEXPECTED_SHAPE = 'The B-rep boolean produced an unexpected non-sol
  */
 export function buildStepShape(params: BaseParams, font: Font | null = null): Shape3D {
   const outerSpec = params.shape.kind === 'converter' ? params.shape.outer : params.shape;
-  const bottom =
-    outerSpec.kind === 'freeform'
-      ? polylineDrawing(freeformOutline(outerSpec, params.quality.chordTolMm))
-      : footprintDrawing(resolveShape(outerSpec));
-  const loftTop = params.edgeSlope > 0 ? bottom.offset(-params.edgeSlope) : bottom;
+  const bottom = bottomDrawing(params, outerSpec, 0);
   const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
   const top = topInset > 0 ? bottom.offset(-topInset) : bottom;
 
-  let solid: Shape3D;
-  if (params.lipRadius > params.height && outerSpec.kind === 'round') {
-    // Truncated arc side: one circle spans the whole wall (plus the
-    // optional top roll), so the body is a revolve of the exact profile
-    // with the arcs as true curves.
-    const radius = outerSpec.diameter / 2;
-    const shape = lipShape(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
-    const mainMid = arcPointAt(shape.main, (shape.main.startAngle + shape.main.endAngle) / 2);
-    const mainEnd = arcPointAt(shape.main, shape.main.endAngle);
-    let pen = draw([0, 0])
-      .lineTo([radius, 0])
-      .threePointsArcTo([radius - mainEnd.inset, mainEnd.z], [radius - mainMid.inset, mainMid.z]);
-    if (shape.roll !== null) {
-      const rollMid = arcPointAt(shape.roll, (shape.roll.startAngle + shape.roll.endAngle) / 2);
-      pen = pen.threePointsArcTo(
-        [radius - topInset, params.height],
-        [radius - rollMid.inset, rollMid.z],
-      );
-    }
-    const section = pen.lineTo([0, params.height]).close();
-    solid = asShape3D((section.sketchOnPlane('XZ') as Sketch).revolve());
-  } else {
-    const bottomSketch = bottom.sketchOnPlane('XY') as Sketch;
-    solid = asShape3D(
-      params.edgeSlope > 0
-        ? bottomSketch.loftWith(loftTop.sketchOnPlane('XY', params.height) as Sketch, {
-            ruled: true,
-          })
-        : bottomSketch.extrude(params.height),
-    );
-    if (params.lipRadius > 0) {
-      // A fillet equal to the wall height makes OCCT fail; clamping one
-      // micron below keeps a full-height quarter-round lip buildable with
-      // no measurable deviation.
-      const filletRadius = Math.min(params.lipRadius, params.height - 0.001);
-      solid = asShape3D(solid.fillet(filletRadius, (edge) => edge.inPlane('XY', params.height)));
-    }
-  }
+  let solid = profiledBodySolid(params, outerSpec, 0);
+  const holes = params.mountingHoles === null ? [] : params.mountingHoles.holes;
   const needsHousings =
-    params.hollow !== null && (params.magnets !== null || params.slotta !== null);
+    params.hollow !== null &&
+    (params.magnets !== null || params.slotta !== null || holes.length > 0);
   const outerBody = needsHousings ? solid.clone() : null;
 
   if (params.hollow !== null) {
@@ -111,6 +74,15 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
       );
       const clipped = asShape3D(housing.intersect(outerBody.clone()));
       solid = asShape3D(solid.fuse(clipped));
+    }
+    if (holes.length > 0 && outerBody !== null) {
+      for (const hole of holes) {
+        const tube = asShape3D(
+          mountingHoleDrawing(hole, hole.rimMm).sketchOnPlane('XY').extrude(params.height),
+        );
+        const clipped = asShape3D(tube.intersect(outerBody.clone()));
+        solid = asShape3D(solid.fuse(clipped));
+      }
     }
     if (params.hollow.supports !== null) {
       // Supports only need to reach the cavity ceiling; extruding to the
@@ -181,6 +153,15 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
     solid = asShape3D(solid.cut(cutter));
   }
 
+  for (const hole of holes) {
+    const cutter = asShape3D(
+      mountingHoleDrawing(hole, 0)
+        .sketchOnPlane('XY', -CUT_EPSILON)
+        .extrude(params.height + 2 * CUT_EPSILON),
+    );
+    solid = asShape3D(solid.cut(cutter));
+  }
+
   if (params.shape.kind === 'converter') {
     const converter = params.shape;
     const insert = footprintDrawing(resolveShape(converter.insert));
@@ -193,11 +174,116 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
     solid = asShape3D(solid.cut(cutter));
   }
 
+  if (params.facingMarkers !== null && params.facingMarkers.markers.length > 0) {
+    solid = applyStepFacingMarkers(solid, params, outerSpec);
+  }
+
   if (params.lettering !== null && font !== null) {
     solid = applyStepLettering(solid, params, font);
   }
 
   return solid;
+}
+
+/** The footprint drawing of the outer shape, optionally inset radially. */
+function bottomDrawing(
+  params: BaseParams,
+  outerSpec: Exclude<BaseParams['shape'], { kind: 'converter' }>,
+  radialInset: number,
+): Drawing {
+  const drawing =
+    outerSpec.kind === 'freeform'
+      ? polylineDrawing(freeformOutline(outerSpec, params.quality.chordTolMm))
+      : footprintDrawing(resolveShape(outerSpec));
+  return radialInset > 0 ? drawing.offset(-radialInset) : drawing;
+}
+
+/**
+ * The profiled body solid, optionally inset radially by a uniform amount.
+ * At inset zero this is the base body itself; a positive inset yields the
+ * parallel inner body that bounds facing marker engravings.
+ */
+function profiledBodySolid(
+  params: BaseParams,
+  outerSpec: Exclude<BaseParams['shape'], { kind: 'converter' }>,
+  radialInset: number,
+): Shape3D {
+  const bottom = bottomDrawing(params, outerSpec, radialInset);
+  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
+  if (params.lipRadius > params.height && outerSpec.kind === 'round') {
+    // Truncated arc side: one circle spans the whole wall (plus the
+    // optional top roll), so the body is a revolve of the exact profile
+    // with the arcs as true curves.
+    const radius = outerSpec.diameter / 2 - radialInset;
+    const shape = lipShape(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
+    const mainMid = arcPointAt(shape.main, (shape.main.startAngle + shape.main.endAngle) / 2);
+    const mainEnd = arcPointAt(shape.main, shape.main.endAngle);
+    let pen = draw([0, 0])
+      .lineTo([radius, 0])
+      .threePointsArcTo([radius - mainEnd.inset, mainEnd.z], [radius - mainMid.inset, mainMid.z]);
+    if (shape.roll !== null) {
+      const rollMid = arcPointAt(shape.roll, (shape.roll.startAngle + shape.roll.endAngle) / 2);
+      pen = pen.threePointsArcTo(
+        [radius - topInset, params.height],
+        [radius - rollMid.inset, rollMid.z],
+      );
+    }
+    const section = pen.lineTo([0, params.height]).close();
+    return asShape3D((section.sketchOnPlane('XZ') as Sketch).revolve());
+  }
+  const loftTop = params.edgeSlope > 0 ? bottom.offset(-params.edgeSlope) : bottom;
+  const bottomSketch = bottom.sketchOnPlane('XY') as Sketch;
+  let solid = asShape3D(
+    params.edgeSlope > 0
+      ? bottomSketch.loftWith(loftTop.sketchOnPlane('XY', params.height) as Sketch, {
+          ruled: true,
+        })
+      : bottomSketch.extrude(params.height),
+  );
+  if (params.lipRadius > 0) {
+    // A fillet equal to the wall height makes OCCT fail; clamping one
+    // micron below keeps a full-height quarter-round lip buildable with
+    // no measurable deviation.
+    const filletRadius = Math.min(params.lipRadius, params.height - 0.001);
+    solid = asShape3D(solid.fillet(filletRadius, (edge) => edge.inPlane('XY', params.height)));
+  }
+  return solid;
+}
+
+/**
+ * Cuts the configured facing markers into the wall: each marker is a
+ * radial prism clipped against the band between the wall and the
+ * depth-inset inner body, so the engraving depth stays uniform on every
+ * wall profile, including the truncated arc sides.
+ */
+function applyStepFacingMarkers(
+  solid: Shape3D,
+  params: BaseParams,
+  outerSpec: Exclude<BaseParams['shape'], { kind: 'converter' }>,
+): Shape3D {
+  const facing = params.facingMarkers;
+  if (facing === null || facing.markers.length === 0) {
+    return solid;
+  }
+  const inner = profiledBodySolid(params, outerSpec, facing.depth);
+  const outline =
+    outerSpec.kind === 'freeform'
+      ? freeformOutline(outerSpec, params.quality.chordTolMm)
+      : outlineFor(resolveShape(outerSpec), 0.2);
+  const reach = Math.max(...outline.map(([x, y]) => Math.hypot(x, y))) + 5;
+  let result = solid;
+  for (const marker of facing.markers) {
+    for (const polygon of markerProfilePolygons(marker, params.height)) {
+      const prism = asShape3D(
+        asShape3D(polylineDrawing(polygon).sketchOnPlane('XY').extrude(reach))
+          .rotate(90, [0, 0, 0], [1, 0, 0])
+          .rotate(marker.angleDeg + 90, [0, 0, 0], [0, 0, 1]),
+      );
+      const cutter = asShape3D(prism.cut(inner.clone()));
+      result = asShape3D(result.cut(cutter));
+    }
+  }
+  return result;
 }
 
 /**
@@ -388,6 +474,19 @@ export function footprintDrawing(shape: ResolvedShape): Drawing {
     case 'hex':
       return polylineDrawing(hexOutline(shape.acrossFlats));
   }
+}
+
+/**
+ * The footprint drawing of one mounting hole, grown by the given rim.
+ * Hex holes follow the hexOutline convention (first vertex at +X), so
+ * rotation 0 aligns them with hex base shapes.
+ */
+function mountingHoleDrawing(hole: MountingHoleSpec, grow: number): Drawing {
+  const drawing =
+    hole.shape === 'round'
+      ? drawCircle(hole.sizeMm / 2 + grow)
+      : polylineDrawing(hexOutline(hole.sizeMm + 2 * grow)).rotate(hole.rotationDeg);
+  return drawing.translate(hole.offsetX, hole.offsetY);
 }
 
 function magnetDrawings(params: BaseParams, magnets: MagnetParams, grow: number): Drawing[] {
