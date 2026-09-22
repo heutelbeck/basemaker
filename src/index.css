@@ -363,6 +363,19 @@ input[type='range'] {
   gap: 8px;
 }
 
+.freeform-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.freeform-zoom output {
+  min-width: 4ch;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .freeform-canvas {
   background: var(--bg);
   border: 1px solid var(--border);
