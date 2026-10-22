@@ -1,7 +1,12 @@
 import type { FacingMarkerParams } from '../params/facingMarkers.ts';
 import { frontArcMarkers } from '../params/facingMarkers.ts';
 import { gwHexPegHole, gwTwinPegHoles } from '../params/mountingHoles.ts';
-import { defaultAdapterTrayParams, defaultMovementTrayParams } from '../params/trays.ts';
+import type { SheetInlayParams } from '../params/trays.ts';
+import {
+  defaultAdapterTrayParams,
+  defaultMovementTrayParams,
+  defaultTrayMagnets,
+} from '../params/trays.ts';
 import type { BaseParams, ShapeSpec } from '../params/types.ts';
 import { defaultParams } from '../params/types.ts';
 import type { Job } from './job.ts';
@@ -237,6 +242,62 @@ function skirmishTray(pocketShape: ShapeSpec, cols: number, rows: number, gap: n
   };
 }
 
+// Old World movement trays use print-tested values: tight pockets that
+// hold the bases by their full 3.4 mm height, a 3 mm rim, and sides at
+// the tested angle of 1.41 mm run per 6 mm rise. Every size comes plain,
+// with each pocket floor recessed for a cut 1 mm steel sheet piece, and
+// with that sheet plus 6 x 2 mm magnet holes in a 2 mm bottom layer, so
+// the magnets touch the sheet and the loaded tray holds to a steel
+// transport sheet.
+const TOW_TRAY_POCKET_DEPTH = 3.4;
+const TOW_TRAY_SLOPE_PER_MM = 1.41 / 6;
+const TOW_TRAY_SHEET: SheetInlayParams = { depth: 1, inset: 2, placement: 'pockets' };
+
+type TowTrayVariant = 'plain' | 'sheet' | 'magnets';
+
+function towMovementTray(
+  pocketShape: ShapeSpec,
+  cols: number,
+  rows: number,
+  variant: TowTrayVariant,
+): Job {
+  const floor = variant === 'magnets' ? TOW_TRAY_SHEET.depth + 2 : 2.6;
+  return {
+    generator: 'movementTray',
+    params: {
+      ...defaultMovementTrayParams(),
+      pocketShape,
+      cols,
+      rows,
+      clearance: 0,
+      pocketDepth: TOW_TRAY_POCKET_DEPTH,
+      floor,
+      edgeSlope: TOW_TRAY_SLOPE_PER_MM * (TOW_TRAY_POCKET_DEPTH + floor),
+      sheetInlay: variant === 'plain' ? null : { ...TOW_TRAY_SHEET },
+      magnets: variant === 'magnets' ? defaultTrayMagnets(cols * rows) : null,
+    },
+  };
+}
+
+function towMovementTrays(
+  pocketShape: ShapeSpec,
+  pocketLabel: string,
+  cols: number,
+  rows: number,
+): LibraryEntry[] {
+  const name = `Movement tray ${cols}x${rows} of ${pocketLabel}`;
+  const entry = (suffix: string, variant: TowTrayVariant): LibraryEntry => ({
+    system: 'The Old World',
+    name: `${name}${suffix}`,
+    job: towMovementTray(pocketShape, cols, rows, variant),
+  });
+  return [
+    entry('', 'plain'),
+    entry(', 1 mm steel plate', 'sheet'),
+    entry(', 1 mm steel plate, 6x2 mm magnets', 'magnets'),
+  ];
+}
+
 // The push-fit bases of the Leviathan (2023) and Armageddon (2026)
 // launch boxes carry peg holes: small infantry bases a centered hex
 // hole, larger bases two round holes side by side. GW publishes no
@@ -404,41 +465,16 @@ export const GAME_LIBRARY: LibraryEntry[] = [
       1,
     ),
   },
-  {
-    system: 'The Old World',
-    name: 'Movement tray 5x1 of 25 mm squares',
-    job: movementTray({ kind: 'square', size: 25 }, 5, 1),
-  },
-  {
-    system: 'The Old World',
-    name: 'Movement tray 5x2 of 25 mm squares',
-    job: movementTray({ kind: 'square', size: 25 }, 5, 2),
-  },
-  {
-    system: 'The Old World',
-    name: 'Horde tray 5x4 of 25 mm squares',
-    job: movementTray({ kind: 'square', size: 25 }, 5, 4),
-  },
-  {
-    system: 'The Old World',
-    name: 'Movement tray 5x2 of 30 mm squares',
-    job: movementTray({ kind: 'square', size: 30 }, 5, 2),
-  },
-  {
-    system: 'The Old World',
-    name: 'Ogre tray 3x2 of 40 mm squares',
-    job: movementTray({ kind: 'square', size: 40 }, 3, 2),
-  },
-  {
-    system: 'The Old World',
-    name: 'Cavalry rank 5x1 of 30x60 mm',
-    job: movementTray({ kind: 'rect', length: 60, width: 30 }, 5, 1),
-  },
-  {
-    system: 'The Old World',
-    name: 'Cavalry block 5x2 of 30x60 mm',
-    job: movementTray({ kind: 'rect', length: 60, width: 30 }, 5, 2),
-  },
+  ...towMovementTrays({ kind: 'square', size: 25 }, '25 mm squares', 5, 1),
+  ...towMovementTrays({ kind: 'square', size: 25 }, '25 mm squares', 5, 2),
+  ...towMovementTrays({ kind: 'square', size: 25 }, '25 mm squares', 5, 3),
+  ...towMovementTrays({ kind: 'square', size: 25 }, '25 mm squares', 5, 4),
+  ...towMovementTrays({ kind: 'square', size: 30 }, '30 mm squares', 5, 2),
+  ...towMovementTrays({ kind: 'square', size: 30 }, '30 mm squares', 4, 3),
+  ...towMovementTrays({ kind: 'square', size: 40 }, '40 mm squares', 3, 1),
+  ...towMovementTrays({ kind: 'square', size: 40 }, '40 mm squares', 3, 2),
+  ...towMovementTrays({ kind: 'rect', length: 60, width: 30 }, '30x60 mm', 5, 1),
+  ...towMovementTrays({ kind: 'rect', length: 60, width: 30 }, '30x60 mm', 5, 2),
   {
     system: 'The Old World',
     name: 'Bretonnian lance of 3 (2 ranks) 30x60 mm',

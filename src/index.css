@@ -16,6 +16,11 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -25,6 +30,7 @@ body {
 #root,
 .app-layout {
   height: 100vh;
+  height: 100dvh;
 }
 
 .app-layout {
@@ -67,6 +73,11 @@ body {
   position: relative;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+}
+
+.settings-toggle {
+  display: none;
 }
 
 .preview-canvas {
@@ -524,5 +535,94 @@ input[type='range'] {
   }
   100% {
     left: 100%;
+  }
+}
+
+/* Phones: the settings become a full-screen overlay opened by a floating
+   toggle, controls grow to touch size, and field rows wrap. */
+@media (max-width: 768px) {
+  .app-layout {
+    position: relative;
+  }
+
+  .sidebar {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    width: 100%;
+    padding: 64px 12px 24px;
+    border-right: none;
+  }
+
+  .settings-open .sidebar {
+    display: flex;
+  }
+
+  .settings-toggle {
+    display: block;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 20;
+    min-height: 44px;
+    padding: 0 16px;
+    border-color: var(--accent);
+    background: var(--bg-raised);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+  select,
+  button {
+    min-height: 44px;
+  }
+
+  .toggle input,
+  .overhang-toggle input {
+    width: 20px;
+    height: 20px;
+  }
+
+  .field-row {
+    flex-wrap: wrap;
+  }
+
+  .field-row > .field {
+    flex-basis: 140px;
+  }
+
+  .library-list {
+    max-height: 50vh;
+  }
+
+  .busy-badge {
+    top: 64px;
+  }
+
+  .stale-badge {
+    max-width: calc(100% - 150px);
+  }
+
+  .busy-badge,
+  .stale-badge,
+  .dims-badge,
+  .overhang-toggle {
+    font-size: 11px;
+  }
+
+  .dims-badge {
+    bottom: 60px;
+  }
+
+  .overhang-toggle {
+    min-height: 40px;
   }
 }

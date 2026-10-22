@@ -122,6 +122,43 @@ function shapeDimensionIssues(shape: ShapeSpec): ValidationIssue[] {
   return issues;
 }
 
+/**
+ * Checks shared by every magnet slot layout: positive dimensions, a whole
+ * count, line spacing wide enough, and every padded slot inside the
+ * footprint as judged by `contains`.
+ */
+export function magnetSlotIssues(
+  magnets: MagnetParams,
+  centers: readonly Vec[],
+  contains: (x: number, y: number) => boolean,
+): ValidationIssue[] {
+  const halfX = (magnets.shape === 'round' ? magnets.diameter : magnets.length) / 2;
+  const halfY = (magnets.shape === 'round' ? magnets.diameter : magnets.width) / 2;
+  if (!(halfX > 0) || !(halfY > 0) || !(magnets.depth > 0) || magnets.padding < 0) {
+    return [{ code: 'magnet-dimensions', message: ERROR_MAGNET_DIMENSIONS_POSITIVE }];
+  }
+  const issues: ValidationIssue[] = [];
+  if (!Number.isInteger(magnets.count) || magnets.count < 1) {
+    issues.push({ code: 'magnet-count', message: ERROR_MAGNET_COUNT_INVALID });
+  }
+  if (
+    magnets.layout === 'line' &&
+    magnets.count > 1 &&
+    magnets.spacing < 2 * (halfX + magnets.padding)
+  ) {
+    issues.push({ code: 'magnet-spacing', message: ERROR_MAGNET_SPACING_TOO_SMALL });
+  }
+  const fits = centers.every(([cx, cy]) =>
+    rectCorners(halfX + magnets.padding, halfY + magnets.padding, 0, cx, cy).every(([px, py]) =>
+      contains(px, py),
+    ),
+  );
+  if (!fits) {
+    issues.push({ code: 'magnet-fit', message: ERROR_MAGNET_OUTSIDE_FOOTPRINT });
+  }
+  return issues;
+}
+
 function rectCorners(
   hx: number,
   hy: number,
@@ -239,7 +276,12 @@ export function validate(params: BaseParams): ValidationIssue[] {
 
   const footprint = footprintCheck;
   const rIn = footprint.rIn;
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
+  const topInset = topInsetFor(
+    params.height,
+    params.edgeSlope,
+    params.lipRadius,
+    params.lipTopRadius,
+  );
 
   if (!(params.height > 0)) {
     issues.push({ code: 'height', message: ERROR_HEIGHT_POSITIVE });
@@ -282,32 +324,13 @@ export function validate(params: BaseParams): ValidationIssue[] {
   }
 
   if (magnets !== null) {
-    const halfX = (magnets.shape === 'round' ? magnets.diameter : magnets.length) / 2;
-    const halfY = (magnets.shape === 'round' ? magnets.diameter : magnets.width) / 2;
-    if (!(halfX > 0) || !(halfY > 0) || !(magnets.depth > 0) || magnets.padding < 0) {
-      issues.push({ code: 'magnet-dimensions', message: ERROR_MAGNET_DIMENSIONS_POSITIVE });
-    } else {
-      if (!Number.isInteger(magnets.count) || magnets.count < 1) {
-        issues.push({ code: 'magnet-count', message: ERROR_MAGNET_COUNT_INVALID });
-      }
-      if (magnets.depth + magnets.padding >= params.height) {
-        issues.push({ code: 'magnet-depth', message: ERROR_MAGNET_TOO_DEEP });
-      }
-      if (
-        magnets.layout === 'line' &&
-        magnets.count > 1 &&
-        magnets.spacing < 2 * (halfX + magnets.padding)
-      ) {
-        issues.push({ code: 'magnet-spacing', message: ERROR_MAGNET_SPACING_TOO_SMALL });
-      }
-      const fits = magnetCenters(params).every(([cx, cy]) =>
-        rectCorners(halfX + magnets.padding, halfY + magnets.padding, 0, cx, cy).every(
-          ([px, py]) => footprint.contains(px, py, topInset),
-        ),
-      );
-      if (!fits) {
-        issues.push({ code: 'magnet-fit', message: ERROR_MAGNET_OUTSIDE_FOOTPRINT });
-      }
+    const slotIssues = magnetSlotIssues(magnets, magnetCenters(params), (x, y) =>
+      footprint.contains(x, y, topInset),
+    );
+    issues.push(...slotIssues);
+    const dimensionsValid = !slotIssues.some((issue) => issue.code === 'magnet-dimensions');
+    if (dimensionsValid && magnets.depth + magnets.padding >= params.height) {
+      issues.push({ code: 'magnet-depth', message: ERROR_MAGNET_TOO_DEEP });
     }
   }
 
@@ -506,10 +529,7 @@ export function validate(params: BaseParams): ValidationIssue[] {
       }
       widthLimit = perimeter * 0.45;
     }
-    if (
-      plaque.widthMm > widthLimit ||
-      plaque.heightMm > params.height - params.lipRadius - 0.6
-    ) {
+    if (plaque.widthMm > widthLimit || plaque.heightMm > params.height - params.lipRadius - 0.6) {
       issues.push({ code: 'plaque-fit', message: ERROR_PLAQUE_DOES_NOT_FIT });
     }
     const text = plaque.text;
@@ -536,7 +556,11 @@ export function validate(params: BaseParams): ValidationIssue[] {
 
   if (params.surface !== null) {
     issues.push(
-      ...validateSurface(params.surface, params.height, hollow !== null ? hollow.topThickness : null),
+      ...validateSurface(
+        params.surface,
+        params.height,
+        hollow !== null ? hollow.topThickness : null,
+      ),
     );
   }
 
@@ -636,4 +660,3 @@ function slottaTouchesMagnets(
 }
 
 /** Center X positions of a row of `count` magnets spaced `spacing` apart. */
-

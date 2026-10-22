@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { GeneratorId } from './generators/job.ts';
 import { GENERATOR_LABELS, defaultJobFor } from './generators/job.ts';
 import { PreviewCanvas } from './preview/PreviewCanvas.tsx';
@@ -30,14 +30,24 @@ export function App() {
   const overhangOverlay = useAppStore((state) => state.overhangOverlay);
   const showOverhangs = useAppStore((state) => state.showOverhangs);
   const toggleOverhangs = useAppStore((state) => state.toggleOverhangs);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     bootstrapGeometry();
   }, []);
 
   return (
-    <div className="app-layout">
-      <aside className="sidebar">
+    <div className={settingsOpen ? 'app-layout settings-open' : 'app-layout'}>
+      <button
+        type="button"
+        className="settings-toggle"
+        aria-expanded={settingsOpen}
+        aria-controls="settings"
+        onClick={() => setSettingsOpen((open) => !open)}
+      >
+        {settingsOpen ? 'Show model' : 'Settings'}
+      </button>
+      <aside id="settings" className="sidebar">
         <header className="app-header">
           <h1>Basemaker</h1>
           <p>Parametric miniature bases, printable smooth</p>

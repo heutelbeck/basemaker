@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { buildAdapterTray, buildMovementTray, cellCenters } from '../src/geometry/buildTray.ts';
+import { buildAdapterTray, buildMovementTray } from '../src/geometry/buildTray.ts';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
 import type { AdapterTrayParams, MovementTrayParams } from '../src/params/trays.ts';
 import {
+  cellCenters,
   defaultAdapterTrayParams,
   defaultMovementTrayParams,
+  defaultTrayMagnets,
+  formationCenters,
+  movementTrayOutline,
+  trayMagnetCenters,
   validateAdapterTray,
   validateMovementTray,
 } from '../src/params/trays.ts';
+import { polygonContains } from '../src/params/polygon.ts';
 
 function movementTray(overrides: Partial<MovementTrayParams>): MovementTrayParams {
   return { ...defaultMovementTrayParams(), ...overrides };
@@ -161,8 +167,7 @@ describe('tray styles', () => {
 });
 
 describe('formations', () => {
-  it('lays the official triangular lance wedge: rank r holds r + 1 knights', async () => {
-    const { formationCenters } = await import('../src/geometry/buildTray.ts');
+  it('lays the official triangular lance wedge: rank r holds r + 1 knights', () => {
     const centers = formationCenters('lance', 3, 1, 25, 50);
     expect(centers).toHaveLength(6);
     const front = centers.filter(([, y]) => Math.abs(y - 50) < 1e-9);
@@ -173,8 +178,7 @@ describe('formations', () => {
     expect(rear.map(([x]) => x).sort((a, b) => a - b)).toEqual([-25, 0, 25]);
   });
 
-  it('offsets alternate skirmish rows by half a pitch', async () => {
-    const { formationCenters } = await import('../src/geometry/buildTray.ts');
+  it('offsets alternate skirmish rows by half a pitch', () => {
     const centers = formationCenters('skirmish', 2, 3, 34, 34);
     const row0 = centers.slice(0, 3).map(([x]) => x);
     const row1 = centers.slice(3).map(([x]) => x);
@@ -306,5 +310,107 @@ describe('adapter tray', () => {
       adapterTray({ donor: { kind: 'square', size: 25 }, target: { kind: 'square', size: 25 } }),
     );
     expect(issues.map((issue) => issue.code)).toContain('tray-cell');
+  });
+});
+
+describe('tray magnets', () => {
+  const sheet = { depth: 1, inset: 2, placement: 'pockets' } as const;
+
+  it('defaults to 6 x 2 mm discs, one per five bases, spread evenly', () => {
+    expect(defaultTrayMagnets(20)).toMatchObject({
+      shape: 'round',
+      layout: 'even',
+      diameter: 6,
+      depth: 2,
+      count: 4,
+    });
+    expect(defaultTrayMagnets(3).count).toBe(1);
+  });
+
+  it('sinks blind slots of the magnet size into the tray underside', async () => {
+    const wasm = await getManifold();
+    const magnets = defaultTrayMagnets(20);
+    const base = { rows: 4, cols: 5, floor: 3, edgeSlope: 0 };
+    const plain = buildMovementTray(wasm, movementTray(base));
+    const withMagnets = buildMovementTray(wasm, movementTray({ ...base, magnets }));
+    const slotVolume = 4 * Math.PI * 3 * 3 * 2;
+    expect(withMagnets.status()).toBe('NoError');
+    expect(withMagnets.genus()).toBe(0);
+    expect((plain.volume() - withMagnets.volume()) / slotVolume).toBeCloseTo(1, 1);
+    plain.delete();
+    withMagnets.delete();
+  });
+
+  it('opens a slot as deep as the floor below the sheet into the recess so the magnet touches the sheet', async () => {
+    const wasm = await getManifold();
+    const tray = buildMovementTray(
+      wasm,
+      movementTray({
+        rows: 1,
+        cols: 1,
+        floor: 3,
+        sheetInlay: sheet,
+        magnets: { ...defaultTrayMagnets(1), depth: 2 },
+      }),
+    );
+    expect(tray.status()).toBe('NoError');
+    expect(tray.genus()).toBe(1);
+    tray.delete();
+  });
+
+  it('keeps evenly spread magnets inside the stepped outline of a lance wedge', () => {
+    const params = movementTray({
+      pocketShape: { kind: 'rect', length: 60, width: 30 },
+      pocketRotated: true,
+      formation: 'lance',
+      rows: 4,
+      cols: 1,
+      floor: 3,
+      magnets: defaultTrayMagnets(10),
+    });
+    expect(validateMovementTray(params)).toEqual([]);
+    const outline = movementTrayOutline(params);
+    const centers = trayMagnetCenters(defaultTrayMagnets(10), outline, params.edgeSlope);
+    expect(centers).toHaveLength(2);
+    expect(centers.every(([x, y]) => polygonContains(outline, x, y, 3))).toBe(true);
+  });
+
+  it.each([
+    [
+      'slots deeper than the floor below the sheet',
+      { floor: 3, sheetInlay: sheet, magnets: { ...defaultTrayMagnets(5), depth: 2.2 } },
+      'tray-magnet-depth',
+    ],
+    [
+      'slots on a floorless skeleton tray',
+      { style: 'skeleton', floor: 3, magnets: defaultTrayMagnets(5) },
+      'tray-web-magnets',
+    ],
+    [
+      'slots sharing the underside with a full sheet',
+      {
+        floor: 3,
+        sheetInlay: { ...sheet, placement: 'underside' },
+        magnets: defaultTrayMagnets(5),
+      },
+      'tray-magnet-sheet',
+    ],
+    [
+      'a line of slots running past the tray edge',
+      { floor: 3, magnets: { ...defaultTrayMagnets(5), layout: 'line', count: 3, spacing: 70 } },
+      'magnet-fit',
+    ],
+  ] as [string, Partial<MovementTrayParams>, string][])('rejects %s', (_label, overrides, code) => {
+    const issues = validateMovementTray(movementTray(overrides));
+    expect(issues.map((issue) => issue.code)).toContain(code);
+  });
+
+  it('cuts magnet slots into adapter trays as well', async () => {
+    const wasm = await getManifold();
+    const params = adapterTray({ rows: 2, cols: 5, floor: 2, magnets: defaultTrayMagnets(10) });
+    expect(validateAdapterTray(params)).toEqual([]);
+    const tray = buildAdapterTray(wasm, params);
+    expect(tray.status()).toBe('NoError');
+    tray.delete();
   });
 });

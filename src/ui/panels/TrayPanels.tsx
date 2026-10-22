@@ -4,10 +4,13 @@ import type {
   SheetInlayParams,
   TrayAccent,
 } from '../../params/trays.ts';
+import { defaultTrayMagnets, trayMagnetDepthBudget } from '../../params/trays.ts';
+import type { MagnetParams } from '../../params/types.ts';
 import { useAppStore } from '../../state/store.ts';
 import { NumberField } from '../controls/NumberField.tsx';
 import { Select } from '../controls/Select.tsx';
 import { Toggle } from '../controls/Toggle.tsx';
+import { MagnetFields } from './MagnetsPanel.tsx';
 import { Section } from './Section.tsx';
 import { ShapeEditor } from './ShapeEditor.tsx';
 
@@ -22,6 +25,7 @@ interface TrayNumbers {
   floor: number;
   edgeSlope: number;
   sheetInlay: SheetInlayParams | null;
+  magnets: MagnetParams | null;
 }
 
 function TrayCommonFields({
@@ -34,6 +38,7 @@ function TrayCommonFields({
   lance?: boolean;
 }) {
   const lanceModels = (values.rows * (values.rows + 1)) / 2;
+  const pocketCount = lance ? lanceModels : values.rows * values.cols;
   return (
     <>
       <div className="field-row">
@@ -150,6 +155,40 @@ function TrayCommonFields({
           </>
         )}
       </Section>
+      <Section
+        title="Magnet slots (underside)"
+        enabled={values.magnets !== null}
+        onToggle={(enabled) => {
+          if (!enabled) {
+            onChange({ magnets: null });
+            return;
+          }
+          // Thicken the floor when needed so the default magnets fit below
+          // the pockets and any pocket sheet recess.
+          const magnets = defaultTrayMagnets(pocketCount);
+          const sheetDepth = values.floor - trayMagnetDepthBudget(values);
+          onChange({ magnets, floor: Math.max(values.floor, magnets.depth + sheetDepth) });
+        }}
+      >
+        {values.magnets !== null && (
+          <>
+            <MagnetFields
+              magnets={values.magnets}
+              onChange={(change) =>
+                onChange({
+                  magnets: { ...(values.magnets ?? defaultTrayMagnets(pocketCount)), ...change },
+                })
+              }
+              footprintName="tray"
+            />
+            <p className="freeform-hint">
+              Slots open on the tray underside so the loaded tray holds to a steel sheet. Depth is
+              the magnet thickness; a slot as deep as the floor below the pockets and any pocket
+              sheet recess opens into it, so the magnet touches the sheet. Solid trays only.
+            </p>
+          </>
+        )}
+      </Section>
     </>
   );
 }
@@ -223,8 +262,8 @@ export function MovementTrayPanel() {
         {params.style !== 'solid' && (
           <p className="freeform-hint">
             Skeleton trays are stepped ring sockets joined by flat bridges: bases rest on an inner
-            ledge over an open ring. Honeycomb trays are one shared basin with a hex mesh floor
-            and a low rim lip. Edge slope and sheet inlays apply to solid trays only.
+            ledge over an open ring. Honeycomb trays are one shared basin with a hex mesh floor and
+            a low rim lip. Edge slope and sheet inlays apply to solid trays only.
           </p>
         )}
         <Section
@@ -293,8 +332,8 @@ export function MovementTrayPanel() {
                 />
               </label>
               <p className="freeform-hint">
-                A layer in a second color, slightly larger than the tray, showing as a contour
-                band around the silhouette and inside every opening. 3MF and STL only.
+                A layer in a second color, slightly larger than the tray, showing as a contour band
+                around the silhouette and inside every opening. 3MF and STL only.
               </p>
             </>
           )}

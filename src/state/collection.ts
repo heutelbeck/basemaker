@@ -40,6 +40,7 @@ function migrate(entry: StoredEntry): SavedBase {
     if (migrated.job.params.sheetInlay !== null) {
       migrated.job.params.sheetInlay.placement ??= 'underside';
     }
+    migrated.job.params.magnets ??= null;
     if (migrated.job.generator === 'adapterTray') {
       migrated.job.params.cellMarkers ??= false;
     }

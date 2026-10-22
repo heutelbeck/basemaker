@@ -6,8 +6,18 @@ import type {
   MovementTrayParams,
   SheetInlayParams,
   TrayAccent,
-  TrayFormation,
 } from '../params/trays.ts';
+import {
+  adapterTrayOutline,
+  cellCenters,
+  movementTrayCells,
+  movementTrayOutline,
+  rankRects,
+  trayMagnetCenters,
+  trayMagnetDepthBudget,
+} from '../params/trays.ts';
+import type { MagnetParams } from '../params/types.ts';
+import { magnetSlotCutters } from './features/magnets.ts';
 import { withGeometryScope } from './dispose.ts';
 import type { Track } from './dispose.ts';
 import { CUT_EPSILON, buildShellSolid, shellOutlines } from './features/shell.ts';
@@ -41,6 +51,9 @@ interface TrayLayout {
   edgeSlope: number;
   markers: CellMarkerPlan | null;
   sheetInlay: SheetInlayParams | null;
+  magnets: MagnetParams | null;
+  magnetCenters: Point2[];
+  tolMm: number;
 }
 
 /** Sharp corners for rectangular pockets, arcs for curved shapes. */
@@ -50,100 +63,6 @@ function pocketJoin(kind: string): 'Round' | 'Miter' {
 
 function rotateOutline(outline: Point2[]): Point2[] {
   return outline.map(([x, y]) => [-y, x] as Point2);
-}
-
-/** Cell center positions of a rows x cols grid centered on the origin. */
-export function cellCenters(layout: {
-  rows: number;
-  cols: number;
-  pitchX: number;
-  pitchY: number;
-}): Point2[] {
-  const centers: Point2[] = [];
-  for (let row = 0; row < layout.rows; row++) {
-    for (let col = 0; col < layout.cols; col++) {
-      centers.push([
-        (col - (layout.cols - 1) / 2) * layout.pitchX,
-        (row - (layout.rows - 1) / 2) * layout.pitchY,
-      ]);
-    }
-  }
-  return centers;
-}
-
-/**
- * Formation-aware cell centers. Lance is the official Bretonnian wedge:
- * rank r holds r + 1 bases, each rank centered, front rank first - `rows`
- * is the number of ranks, `cols` is ignored. Skirmish shifts alternate
- * rows by half a pitch.
- */
-export function formationCenters(
-  formation: TrayFormation,
-  rows: number,
-  cols: number,
-  pitchX: number,
-  pitchY: number,
-): Point2[] {
-  const centers: Point2[] = [];
-  if (formation === 'lance') {
-    for (let row = 0; row < rows; row++) {
-      for (let i = 0; i <= row; i++) {
-        centers.push([(i - row / 2) * pitchX, ((rows - 1) / 2 - row) * pitchY]);
-      }
-    }
-    return centers;
-  }
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      let x = (col - (cols - 1) / 2) * pitchX;
-      const y = (row - (rows - 1) / 2) * pitchY;
-      if (formation === 'skirmish' && row % 2 === 1) {
-        x += pitchX / 2;
-      }
-      centers.push([x, y]);
-    }
-  }
-  return centers;
-}
-
-/**
- * One convex rectangle per rank, hugging that rank's cells plus the rim.
- * Real stepped trays (GW, LITKO) follow the staggered ranks exactly; a
- * convex hull would bridge the steps with diagonals and ruin base-to-base
- * contact, so the tray body is the union of these per-rank frustums.
- */
-export function rankRects(
-  centers: Point2[],
-  cellHx: number,
-  cellHy: number,
-  rim: number,
-): Point2[][] {
-  const byRow = new Map<number, Point2[]>();
-  for (const center of centers) {
-    const key = Math.round(center[1] * 1000);
-    const row = byRow.get(key);
-    if (row === undefined) {
-      byRow.set(key, [center]);
-    } else {
-      row.push(center);
-    }
-  }
-  const rects: Point2[][] = [];
-  for (const row of byRow.values()) {
-    const xs = row.map(([x]) => x);
-    const y = row[0][1];
-    const minX = Math.min(...xs) - cellHx - rim;
-    const maxX = Math.max(...xs) + cellHx + rim;
-    const minY = y - cellHy - rim;
-    const maxY = y + cellHy + rim;
-    rects.push([
-      [minX, minY],
-      [maxX, minY],
-      [maxX, maxY],
-      [minX, maxY],
-    ]);
-  }
-  return rects;
 }
 
 /**
@@ -168,11 +87,7 @@ export function buildMovementTrayParts(
     const prism = wasm.Manifold.extrude(dilated, layer);
     const accent = prism.translate(0, 0, baseZ);
     const slabProto = wasm.Manifold.cube([span, span, layer + CUT_EPSILON], false);
-    const slab = slabProto.translate(
-      -span / 2,
-      -span / 2,
-      baseZ === 0 ? -CUT_EPSILON : baseZ,
-    );
+    const slab = slabProto.translate(-span / 2, -span / 2, baseZ === 0 ? -CUT_EPSILON : baseZ);
     const trimmed = body.subtract(slab);
     for (const resource of [section, dilated, prism, slabProto, slab, body]) {
       resource.delete();
@@ -206,9 +121,7 @@ export function buildMovementTrayParts(
 export function buildMovementTray(wasm: ManifoldToplevel, params: MovementTrayParams): Manifold {
   const tol = params.quality.chordTolMm;
   const pocket = resolveShape(params.pocketShape);
-  const extents = halfExtents(pocket);
-  const phx = (params.pocketRotated ? extents.hy : extents.hx) + params.clearance;
-  const phy = (params.pocketRotated ? extents.hx : extents.hy) + params.clearance;
+  const { phx, phy, pitchX, pitchY, centers } = movementTrayCells(params);
   const baseOutline = outlineFor(pocket, tol);
   const orientedOutline = params.pocketRotated ? rotateOutline(baseOutline) : baseOutline;
   const pocketOutline = outsetOutline(
@@ -218,9 +131,6 @@ export function buildMovementTray(wasm: ManifoldToplevel, params: MovementTrayPa
     tol,
     pocketJoin(params.pocketShape.kind),
   );
-  const pitchX = 2 * phx + params.gap;
-  const pitchY = 2 * phy + params.gap;
-  const centers = formationCenters(params.formation, params.rows, params.cols, pitchX, pitchY);
   if (params.style !== 'solid') {
     return buildWebTray(wasm, params, centers, pocketOutline, pitchX, pitchY, tol);
   }
@@ -243,6 +153,12 @@ export function buildMovementTray(wasm: ManifoldToplevel, params: MovementTrayPa
     edgeSlope: params.edgeSlope,
     markers: null,
     sheetInlay: params.sheetInlay,
+    magnets: params.magnets,
+    magnetCenters:
+      params.magnets === null
+        ? []
+        : trayMagnetCenters(params.magnets, movementTrayOutline(params), params.edgeSlope),
+    tolMm: tol,
   });
 }
 
@@ -273,6 +189,12 @@ export function buildAdapterTray(wasm: ManifoldToplevel, params: AdapterTrayPara
       ? { rows: params.rows, cols: params.cols, pitchX, pitchY, spanX, spanY }
       : null,
     sheetInlay: params.sheetInlay,
+    magnets: params.magnets,
+    magnetCenters:
+      params.magnets === null
+        ? []
+        : trayMagnetCenters(params.magnets, adapterTrayOutline(params), params.edgeSlope),
+    tolMm: tol,
   });
 }
 
@@ -336,9 +258,7 @@ function buildWebTray(
           wasm.Manifold.extrude([pocketOutline], params.pocketDepth + CUT_EPSILON),
         );
         cutters.push(track(bore.translate(x, y, height - params.pocketDepth)));
-        const through = track(
-          wasm.Manifold.extrude([throughOutline], height + 2 * CUT_EPSILON),
-        );
+        const through = track(wasm.Manifold.extrude([throughOutline], height + 2 * CUT_EPSILON));
         cutters.push(track(through.translate(x, y, -CUT_EPSILON)));
       }
       tray = track(wasm.Manifold.difference([body, ...cutters]));
@@ -357,7 +277,11 @@ function buildWebTray(
       let column = 0;
       for (let x = bounds.min[0] - rowPitch; x <= bounds.max[0] + rowPitch; x += columnPitch) {
         const shift = column % 2 === 1 ? rowPitch / 2 : 0;
-        for (let y = bounds.min[1] - rowPitch + shift; y <= bounds.max[1] + rowPitch; y += rowPitch) {
+        for (
+          let y = bounds.min[1] - rowPitch + shift;
+          y <= bounds.max[1] + rowPitch;
+          y += rowPitch
+        ) {
           const hex = track(wasm.CrossSection.ofPolygons([hexOutline(acrossFlats)]));
           hexes.push(track(hex.translate(x, y)));
         }
@@ -425,6 +349,10 @@ function buildTray(wasm: ManifoldToplevel, layout: TrayLayout): Manifold {
         cutters.push(sheetInlayCutter(wasm, track, layout, layout.sheetInlay));
       }
     }
+    if (layout.magnets !== null) {
+      const magnets = { ...layout.magnets, depth: trayMagnetCutDepth(layout.magnets, layout) };
+      cutters.push(...magnetSlotCutters(wasm, track, magnets, layout.magnetCenters, layout.tolMm));
+    }
     if (layout.markers !== null) {
       cutters.push(...cellMarkerCutters(wasm, track, layout.markers, height));
     }
@@ -435,6 +363,20 @@ function buildTray(wasm: ManifoldToplevel, layout: TrayLayout): Manifold {
     }
     return tray;
   });
+}
+
+/**
+ * Slot depth to cut for tray magnets. A slot that reaches the pocket or
+ * sheet recess above overshoots slightly into it, so the two cuts merge
+ * into one opening instead of leaving a zero-thickness skin.
+ */
+export function trayMagnetCutDepth(
+  magnets: MagnetParams,
+  tray: { floor: number; sheetInlay: SheetInlayParams | null },
+): number {
+  return magnets.depth >= trayMagnetDepthBudget(tray) - 1e-9
+    ? magnets.depth + CUT_EPSILON
+    : magnets.depth;
 }
 
 function pocketCutters(

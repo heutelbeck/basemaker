@@ -33,15 +33,7 @@ interface Footprint {
 function footprintOf(params: BaseParams): Footprint {
   const spec = params.shape.kind === 'converter' ? params.shape.outer : params.shape;
   if (spec.kind === 'freeform') {
-    const outline = freeformOutline(spec, 0.1);
-    const hx = Math.max(...outline.map(([x]) => Math.abs(x)));
-    const hy = Math.max(...outline.map(([, y]) => Math.abs(y)));
-    return {
-      outline,
-      hx,
-      hy,
-      contains: (x, y, margin) => polygonContains(outline, x, y, margin),
-    };
+    return polygonFootprint(freeformOutline(spec, 0.1));
   }
   const resolved = resolveShape(spec);
   const outline = outlineFor(resolved, 0.1) as Vec[];
@@ -68,10 +60,7 @@ function pullInside(footprint: Footprint, margin: number, x: number, y: number):
 function gridCenters(footprint: Footprint, margin: number, count: number): Vec[] {
   const usableHx = Math.max(0.1, footprint.hx - margin);
   const usableHy = Math.max(0.1, footprint.hy - margin);
-  const cols = Math.min(
-    count,
-    Math.max(1, Math.round(Math.sqrt((count * usableHx) / usableHy))),
-  );
+  const cols = Math.min(count, Math.max(1, Math.round(Math.sqrt((count * usableHx) / usableHy))));
   const rows = Math.ceil(count / cols);
   const pitchX = (2 * usableHx) / cols;
   const pitchY = rows > 1 ? (2 * usableHy) / (rows - 1) : 0;
@@ -105,9 +94,7 @@ function evenCenters(footprint: Footprint, margin: number, count: number): Vec[]
   if (sites.length < count) {
     return gridCenters(footprint, margin, count);
   }
-  const clipRegion = isConvex(footprint.outline)
-    ? insetConvex(footprint.outline, margin)
-    : null;
+  const clipRegion = isConvex(footprint.outline) ? insetConvex(footprint.outline, margin) : null;
   const reach = 4 * Math.max(footprint.hx, footprint.hy);
   for (let iteration = 0; iteration < 16; iteration++) {
     const cells = voronoiCells(sites, footprint.hx, footprint.hy, reach);
@@ -134,16 +121,51 @@ export function magnetCenters(params: BaseParams): Vec[] {
   if (magnets === null) {
     return [];
   }
+  const topInset = topInsetFor(
+    params.height,
+    params.edgeSlope,
+    params.lipRadius,
+    params.lipTopRadius,
+  );
+  return layoutCenters(magnets, () => footprintOf(params), topInset);
+}
+
+/**
+ * Magnet slot centers inside an arbitrary polygon footprint, keeping
+ * `edgeInset` mm of extra margin to the outline.
+ */
+export function magnetCentersInOutline(
+  magnets: MagnetParams,
+  outline: Vec[],
+  edgeInset: number,
+): Vec[] {
+  return layoutCenters(magnets, () => polygonFootprint(outline), edgeInset);
+}
+
+function polygonFootprint(outline: Vec[]): Footprint {
+  const hx = Math.max(...outline.map(([x]) => Math.abs(x)));
+  const hy = Math.max(...outline.map(([, y]) => Math.abs(y)));
+  return {
+    outline,
+    hx,
+    hy,
+    contains: (x, y, margin) => polygonContains(outline, x, y, margin),
+  };
+}
+
+function layoutCenters(
+  magnets: MagnetParams,
+  footprint: () => Footprint,
+  edgeInset: number,
+): Vec[] {
   if (magnets.layout === 'line') {
     return magnetPositions(magnets.count, magnets.spacing, magnets.offsetX).map((x) => [
       x,
       magnets.offsetY,
     ]);
   }
-  const footprint = footprintOf(params);
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
-  const margin = magnetHalfExtent(magnets) + magnets.padding + topInset + 0.3;
+  const margin = magnetHalfExtent(magnets) + magnets.padding + edgeInset + 0.3;
   return magnets.layout === 'grid'
-    ? gridCenters(footprint, margin, magnets.count)
-    : evenCenters(footprint, margin, magnets.count);
+    ? gridCenters(footprint(), margin, magnets.count)
+    : evenCenters(footprint(), margin, magnets.count);
 }

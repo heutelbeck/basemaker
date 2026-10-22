@@ -1,12 +1,21 @@
 import type { Drawing, Shape3D, Sketch } from 'replicad';
-import { drawRectangle } from 'replicad';
+import { drawCircle, drawRectangle } from 'replicad';
 import { halfExtents, resolveShape } from '../../params/shapeMetrics.ts';
 import type {
   AdapterTrayParams,
   MovementTrayParams,
   SheetInlayParams,
 } from '../../params/trays.ts';
-import { cellCenters, formationCenters, rankRects } from '../buildTray.ts';
+import {
+  adapterTrayOutline,
+  cellCenters,
+  movementTrayCells,
+  movementTrayOutline,
+  rankRects,
+  trayMagnetCenters,
+} from '../../params/trays.ts';
+import type { MagnetParams } from '../../params/types.ts';
+import { trayMagnetCutDepth } from '../buildTray.ts';
 import { CUT_EPSILON } from '../features/shell.ts';
 import type { Point2 } from '../../params/tessellation.ts';
 import { asShape3D, footprintDrawing } from './buildStepShape.ts';
@@ -20,6 +29,8 @@ interface StepTrayLayout {
   floor: number;
   edgeSlope: number;
   sheetInlay: SheetInlayParams | null;
+  magnets: MagnetParams | null;
+  magnetCenters: Point2[];
 }
 
 function grownPocketDrawing(
@@ -42,12 +53,7 @@ const ERROR_STEP_HONEYCOMB =
 
 export function buildStepMovementTray(params: MovementTrayParams): Shape3D {
   const pocket = resolveShape(params.pocketShape);
-  const extents = halfExtents(pocket);
-  const phx = (params.pocketRotated ? extents.hy : extents.hx) + params.clearance;
-  const phy = (params.pocketRotated ? extents.hx : extents.hy) + params.clearance;
-  const pitchX = 2 * phx + params.gap;
-  const pitchY = 2 * phy + params.gap;
-  const centers = formationCenters(params.formation, params.rows, params.cols, pitchX, pitchY);
+  const { phx, phy, pitchX, pitchY, centers } = movementTrayCells(params);
   if (params.style === 'honeycomb') {
     throw new Error(ERROR_STEP_HONEYCOMB);
   }
@@ -98,6 +104,11 @@ export function buildStepMovementTray(params: MovementTrayParams): Shape3D {
     floor: params.floor,
     edgeSlope: params.edgeSlope,
     sheetInlay: params.sheetInlay,
+    magnets: params.magnets,
+    magnetCenters:
+      params.magnets === null
+        ? []
+        : trayMagnetCenters(params.magnets, movementTrayOutline(params), params.edgeSlope),
   });
 }
 
@@ -118,6 +129,11 @@ export function buildStepAdapterTray(params: AdapterTrayParams): Shape3D {
     floor: params.floor,
     edgeSlope: params.edgeSlope,
     sheetInlay: params.sheetInlay,
+    magnets: params.magnets,
+    magnetCenters:
+      params.magnets === null
+        ? []
+        : trayMagnetCenters(params.magnets, adapterTrayOutline(params), params.edgeSlope),
   });
 }
 
@@ -125,10 +141,9 @@ function trayBlock(drawing: Drawing, height: number, edgeSlope: number): Shape3D
   const bottomSketch = drawing.sketchOnPlane('XY') as Sketch;
   return asShape3D(
     edgeSlope > 0
-      ? bottomSketch.loftWith(
-          drawing.offset(-edgeSlope).sketchOnPlane('XY', height) as Sketch,
-          { ruled: true },
-        )
+      ? bottomSketch.loftWith(drawing.offset(-edgeSlope).sketchOnPlane('XY', height) as Sketch, {
+          ruled: true,
+        })
       : bottomSketch.extrude(height),
   );
 }
@@ -170,6 +185,23 @@ function buildStepTray(layout: StepTrayLayout): Shape3D {
         .extrude(inlay.depth + CUT_EPSILON),
     );
     tray = asShape3D(tray.cut(cutter));
+  }
+
+  const magnets = layout.magnets;
+  if (magnets !== null) {
+    for (const [x, y] of layout.magnetCenters) {
+      const slot =
+        magnets.shape === 'round'
+          ? drawCircle(magnets.diameter / 2)
+          : drawRectangle(magnets.length, magnets.width);
+      const cutter = asShape3D(
+        slot
+          .translate(x, y)
+          .sketchOnPlane('XY', -CUT_EPSILON)
+          .extrude(trayMagnetCutDepth(magnets, layout) + CUT_EPSILON),
+      );
+      tray = asShape3D(tray.cut(cutter));
+    }
   }
 
   return tray;
