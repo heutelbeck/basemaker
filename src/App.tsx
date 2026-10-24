@@ -32,10 +32,9 @@ export function App() {
   const overhangOverlay = useAppStore((state) => state.overhangOverlay);
   const showOverhangs = useAppStore((state) => state.showOverhangs);
   const loadCount = useAppStore((state) => state.loadCount);
-  // Drawer layouts put their front at +Y, the drawer opening.
-  const frontAtPlusY = useAppStore(
-    (state) => state.job.generator === 'paintRack' || state.job.generator === 'baseplate',
-  );
+  // A baseplate puts the drawer opening at +Y. Paint racks lean their caps
+  // towards +Y, the back of the drawer, so they are viewed from -Y like bases.
+  const frontAtPlusY = useAppStore((state) => state.job.generator === 'baseplate');
   const toggleOverhangs = useAppStore((state) => state.toggleOverhangs);
   const showMockParts = useAppStore((state) => state.showMockParts);
   const toggleMockParts = useAppStore((state) => state.toggleMockParts);
