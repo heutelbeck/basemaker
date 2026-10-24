@@ -32,6 +32,8 @@ import {
   validateAdapterTray,
   validateMovementTray,
 } from '../params/trays.ts';
+import type { BaseplateParams } from '../params/baseplate.ts';
+import { defaultBaseplateParams, planBaseplate, validateBaseplate } from '../params/baseplate.ts';
 import type { PaintRackParams } from '../params/paintRack.ts';
 import { defaultPaintRackParams, solvePaintRack, validatePaintRack } from '../params/paintRack.ts';
 import type { TemplateParams } from '../params/template.ts';
@@ -58,7 +60,8 @@ export type Job =
   | { generator: 'plants'; params: PlantParams }
   | { generator: 'ruler'; params: RulerParams }
   | { generator: 'template'; params: TemplateParams }
-  | { generator: 'paintRack'; params: PaintRackParams };
+  | { generator: 'paintRack'; params: PaintRackParams }
+  | { generator: 'baseplate'; params: BaseplateParams };
 
 export type GeneratorId = Job['generator'];
 
@@ -72,6 +75,7 @@ export const GENERATOR_LABELS: Record<GeneratorId, string> = {
   ruler: 'Measuring ruler',
   template: 'Area template',
   paintRack: 'Paint rack',
+  baseplate: 'Gridfinity baseplate',
 };
 
 const ERROR_STEP_PAINT_RACK = 'STEP export of paint racks is not yet implemented.';
@@ -102,6 +106,8 @@ export function defaultJobFor(generator: GeneratorId): Job {
       return { generator, params: defaultTemplateParams() };
     case 'paintRack':
       return { generator, params: defaultPaintRackParams() };
+    case 'baseplate':
+      return { generator, params: defaultBaseplateParams() };
   }
 }
 
@@ -125,6 +131,8 @@ export function validateJob(job: Job): ValidationIssue[] {
       return validateTemplate(job.params);
     case 'paintRack':
       return validatePaintRack(job.params);
+    case 'baseplate':
+      return validateBaseplate(job.params);
   }
 }
 
@@ -195,6 +203,10 @@ export async function buildJobMesh(wasm: ManifoldToplevel, job: Job): Promise<Ma
     case 'paintRack': {
       const { buildPaintRack } = await import('../geometry/buildPaintRack.ts');
       return buildPaintRack(wasm, job.params);
+    }
+    case 'baseplate': {
+      const { buildBaseplate } = await import('../geometry/buildBaseplate.ts');
+      return buildBaseplate(wasm, job.params);
     }
   }
 }
@@ -356,6 +368,17 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
           previewOnly: true,
         });
       }
+    } else if (job.generator === 'baseplate') {
+      const { buildBaseplatePieces } = await import('../geometry/buildBaseplate.ts');
+      for (const { piece, solid } of buildBaseplatePieces(wasm, job.params)) {
+        solids.push({
+          name: `part ${piece.label} ${piece.unitsX}x${piece.unitsY}`,
+          // A checkerboard of tones so neighboring parts read apart.
+          colorHex: RACK_COLORS[(piece.column + piece.row) % RACK_COLORS.length],
+          solid,
+          group: piece.label,
+        });
+      }
     } else {
       solids.push({
         name: 'model',
@@ -453,6 +476,10 @@ export async function buildJobStep(job: Job): Promise<Shape3D> {
     // Needs the hull-swept pockets rebuilt as B-rep lofts in replicad.
     case 'paintRack':
       throw new Error(ERROR_STEP_PAINT_RACK);
+    case 'baseplate': {
+      const { buildStepBaseplate } = await import('../geometry/step/buildStepBaseplate.ts');
+      return buildStepBaseplate(job.params);
+    }
   }
 }
 
@@ -486,6 +513,11 @@ export function jobFilename(job: Job, extension: string): string {
       const { unitsX, unitsY, orientation } = job.params;
       const count = solvePaintRack(job.params)?.bottles.length ?? 0;
       return `paint-rack-${unitsX}x${unitsY}-${orientation}-${count}.${extension}`;
+    }
+    case 'baseplate': {
+      const { drawerWidthMm, drawerDepthMm } = job.params;
+      const parts = planBaseplate(job.params)?.length ?? 0;
+      return `baseplate-${Math.round(drawerWidthMm)}x${Math.round(drawerDepthMm)}-${parts}-parts.${extension}`;
     }
   }
 }

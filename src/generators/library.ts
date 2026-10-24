@@ -7,6 +7,8 @@ import {
   defaultMovementTrayParams,
   defaultTrayMagnets,
 } from '../params/trays.ts';
+import { BASEPLATE_STAR_MM, defaultBaseplateParams } from '../params/baseplate.ts';
+import { defaultPaintRackParams } from '../params/paintRack.ts';
 import type { BaseParams, ShapeSpec } from '../params/types.ts';
 import { defaultParams } from '../params/types.ts';
 import type { Job } from './job.ts';
@@ -17,7 +19,8 @@ export type GameSystem =
   | 'The Old World'
   | 'Warhammer Fantasy (legacy)'
   | 'Warmachine & Hordes'
-  | 'Infinity';
+  | 'Infinity'
+  | 'Gridfinity';
 
 export interface LibraryEntry {
   system: GameSystem;
@@ -585,6 +588,26 @@ export const GAME_LIBRARY: LibraryEntry[] = [
   },
   { system: 'Infinity', name: 'Huge TAG 70 mm (S8)', job: infinityBase(70, false) },
   { system: 'Infinity', name: 'Huge TAG 70 mm (S8), LoF arc marked', job: infinityBase(70, true) },
+  {
+    system: 'Gridfinity',
+    name: 'Paint rack: Vallejo / AK 17 ml, 14 x 6 drawer',
+    job: { generator: 'paintRack', params: defaultPaintRackParams() },
+  },
+  {
+    system: 'Gridfinity',
+    name: 'Baseplate: IKEA Alex wide drawer (old model), 600 x 423 mm',
+    job: {
+      generator: 'baseplate',
+      params: {
+        ...defaultBaseplateParams(),
+        drawerWidthMm: 600,
+        drawerDepthMm: 423,
+        alignY: 'end',
+        solidFiller: true,
+        cornerRadiusMm: BASEPLATE_STAR_MM,
+      },
+    },
+  },
 ];
 
 export const GAME_SYSTEMS: GameSystem[] = [
@@ -594,6 +617,7 @@ export const GAME_SYSTEMS: GameSystem[] = [
   'Warhammer Fantasy (legacy)',
   'Warmachine & Hordes',
   'Infinity',
+  'Gridfinity',
 ];
 
 export function libraryFor(system: GameSystem): LibraryEntry[] {

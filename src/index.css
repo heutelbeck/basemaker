@@ -7,6 +7,7 @@
   --text-dim: #8b919c;
   --accent: #e8833a;
   --accent-soft: rgba(232, 131, 58, 0.16);
+  --control: #9aa6b4;
   --error: #e05d5d;
   font-family: 'Segoe UI', 'Noto Sans', system-ui, sans-serif;
   color-scheme: dark;
@@ -103,8 +104,9 @@ body {
 .panel {
   background: var(--bg-inset);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 10px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   transition: border-color 120ms ease;
 }
 
@@ -118,11 +120,11 @@ body {
 
 .panel-header h2 {
   margin: 0;
-  font-size: 13px;
+  padding-left: 8px;
+  border-left: 3px solid var(--accent);
+  font-size: 14px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 .panel-body {
@@ -208,7 +210,7 @@ select:focus {
 }
 
 .toggle input {
-  accent-color: var(--accent);
+  accent-color: var(--control);
 }
 
 .subgroup {

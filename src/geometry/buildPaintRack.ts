@@ -1,4 +1,4 @@
-import type { Manifold, ManifoldToplevel, Vec3 as KernelVec3 } from 'manifold-3d';
+import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import type {
   PaintRackLayout,
   PaintRackModule,
@@ -20,6 +20,7 @@ import {
   solvePaintRack,
 } from '../params/paintRack.ts';
 import { segmentsFor } from '../params/tessellation.ts';
+import { roundedRectPoints } from './roundedRect.ts';
 import { withGeometryScope } from './dispose.ts';
 import type { Track } from './dispose.ts';
 
@@ -43,25 +44,6 @@ interface Context {
   /** The rack being built; geometry stays in drawer coordinates. */
   rack: PaintRackModule;
   big: number;
-}
-
-function roundedRectPoints(half: number, radius: number, z: number, tol: number): KernelVec3[] {
-  const core = half - radius;
-  const perCorner = Math.max(4, Math.ceil(segmentsFor(radius, tol) / 4));
-  const points: KernelVec3[] = [];
-  const corners: [number, number, number][] = [
-    [core, core, 0],
-    [-core, core, Math.PI / 2],
-    [-core, -core, Math.PI],
-    [core, -core, (3 * Math.PI) / 2],
-  ];
-  for (const [cx, cy, start] of corners) {
-    for (let i = 0; i <= perCorner; i++) {
-      const angle = start + ((Math.PI / 2) * i) / perCorner;
-      points.push([cx + radius * Math.cos(angle), cy + radius * Math.sin(angle), z]);
-    }
-  }
-  return points;
 }
 
 function hullOfLevels(ctx: Context, levels: [number, number][]): Manifold {

@@ -47,6 +47,8 @@ const { buildStepAdapterTray, buildStepMovementTray } =
 const { defaultAdapterTrayParams, defaultMovementTrayParams } =
   await import('../src/params/trays.ts');
 const { defaultParams } = await import('../src/params/types.ts');
+const { buildStepBaseplate } = await import('../src/geometry/step/buildStepBaseplate.ts');
+const { defaultBaseplateParams } = await import('../src/params/baseplate.ts');
 
 function testBase() {
   return {
@@ -337,6 +339,25 @@ if (process.argv[2] === '--smoke') {
       }),
     ],
     ['adapter-tray', buildStepAdapterTray(defaultAdapterTrayParams())],
+    [
+      'baseplate-two-parts',
+      buildStepBaseplate({
+        ...defaultBaseplateParams(),
+        drawerWidthMm: 5 * 42 + 6,
+        drawerDepthMm: 2 * 42 + 4,
+        plateWidthMm: 150,
+      }),
+    ],
+    [
+      'baseplate-solid-filler-round-corners',
+      buildStepBaseplate({
+        ...defaultBaseplateParams(),
+        drawerWidthMm: 2 * 42 + 11,
+        drawerDepthMm: 42 + 7,
+        solidFiller: true,
+        cornerRadiusMm: 6,
+      }),
+    ],
     [
       'round-movement-tray',
       buildStepMovementTray({

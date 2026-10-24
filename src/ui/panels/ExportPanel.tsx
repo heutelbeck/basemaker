@@ -4,7 +4,7 @@ import { jobFilename } from '../../generators/job.ts';
 import { freeformOutline } from '../../params/freeform.ts';
 import { resolveShape } from '../../params/shapeMetrics.ts';
 import {
-  exportRackStls,
+  exportPartStls,
   exportStep,
   exportStl,
   exportThreeMf,
@@ -34,7 +34,7 @@ const EXPORT_LABELS = {
   '3mf': '3MF',
   step: 'STEP',
   '3mf-exploded': 'exploded 3MF',
-  'rack-stl': 'rack STLs',
+  'part-stl': 'part STLs',
 } as const;
 
 export function ExportPanel() {
@@ -67,6 +67,7 @@ export function ExportPanel() {
 
   const blocked = issues.length > 0 || exporting !== null;
   const paintRack = job.generator === 'paintRack';
+  const perPart = paintRack || job.generator === 'baseplate';
 
   const tol = job.params.quality.chordTolMm;
   const sliderValue = Math.log10(tol);
@@ -93,8 +94,8 @@ export function ExportPanel() {
         const packed = await exportThreeMf(job);
         const copy = new Uint8Array(packed);
         downloadBlob(copy, jobFilename(job, '3mf'), 'model/3mf');
-      } else if (format === 'rack-stl') {
-        const { data, extension } = await exportRackStls(job);
+      } else if (format === 'part-stl') {
+        const { data, extension } = await exportPartStls(job);
         const type = extension === 'zip' ? 'application/zip' : 'model/stl';
         downloadBlob(new Uint8Array(data), jobFilename(job, extension), type);
       } else if (format === '3mf-exploded') {
@@ -147,12 +148,12 @@ export function ExportPanel() {
         {segmentReadout !== null && `, ${segmentReadout} outline segments`}
       </p>
       <div className="export-buttons">
-        {paintRack ? (
+        {perPart ? (
           <button
             type="button"
             disabled={blocked}
-            title="One STL per distinct rack, each centered for printing and named with how many to print; several come as a ZIP."
-            onClick={() => void runExport('rack-stl')}
+            title="One STL per distinct part, each centered for printing and named with how many to print; several come as a ZIP."
+            onClick={() => void runExport('part-stl')}
           >
             Download STL
           </button>

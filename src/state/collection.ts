@@ -1,4 +1,5 @@
 import type { Job } from '../generators/job.ts';
+import { defaultBaseplateParams } from '../params/baseplate.ts';
 import { defaultPaintRackParams } from '../params/paintRack.ts';
 import type { BaseParams } from '../params/types.ts';
 
@@ -70,6 +71,9 @@ function migrate(entry: StoredEntry): SavedBase {
   if (migrated.job.generator === 'paintRack') {
     // Fields added after the first paint racks were saved take their defaults.
     migrated.job.params = { ...defaultPaintRackParams(), ...migrated.job.params };
+  }
+  if (migrated.job.generator === 'baseplate') {
+    migrated.job.params = { ...defaultBaseplateParams(), ...migrated.job.params };
   }
   if (migrated.job.generator === 'ruler') {
     migrated.job.params.pivotsPerJoint ??= 1;

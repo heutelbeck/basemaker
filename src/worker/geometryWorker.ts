@@ -1,6 +1,7 @@
 import { expose, transfer } from 'comlink';
-import type { RackDownload } from '../export/paintRackZip.ts';
+import { baseplateDownload } from '../export/baseplateZip.ts';
 import { paintRackDownload } from '../export/paintRackZip.ts';
+import type { PartsDownload } from '../export/partsDownload.ts';
 import { writeBinaryStl } from '../export/stlBinary.ts';
 import type { ThreeMfPart } from '../export/threeMf.ts';
 import { writeThreeMfParts } from '../export/threeMf.ts';
@@ -14,7 +15,8 @@ import { toManifoldMesh, toRawMesh } from '../geometry/mesh.ts';
 
 export type BuildOutput = JobBundle;
 
-const ERROR_RACK_ZIP_ONLY_PAINT_RACKS = 'Per-rack STL downloads exist only for paint racks.';
+const ERROR_PART_STLS_UNSUPPORTED =
+  'Per-part STL downloads exist only for paint racks and baseplates.';
 
 /**
  * The last built parts, kept with copied buffers so mesh exports of the
@@ -100,16 +102,20 @@ const api = {
     return transfer(packed, [packed.buffer]);
   },
   /**
-   * The distinct racks of a paint rack drawer, each centered on the origin
-   * for printing: a plain STL, or a ZIP when there are several.
+   * The distinct parts of a paint rack or baseplate drawer, each centered
+   * on the origin for printing: a plain STL, or a ZIP when there are several.
    */
-  async exportRackStls(job: Job): Promise<RackDownload> {
-    if (job.generator !== 'paintRack') {
-      throw new Error(ERROR_RACK_ZIP_ONLY_PAINT_RACKS);
-    }
+  async exportPartStls(job: Job): Promise<PartsDownload> {
     const wasm = await getManifold();
     const stem = jobFilename(job, 'zip').replace(/\.zip$/, '');
-    const download = paintRackDownload(wasm, job.params, stem);
+    let download: PartsDownload;
+    if (job.generator === 'paintRack') {
+      download = paintRackDownload(wasm, job.params, stem);
+    } else if (job.generator === 'baseplate') {
+      download = baseplateDownload(wasm, job.params, stem);
+    } else {
+      throw new Error(ERROR_PART_STLS_UNSUPPORTED);
+    }
     return transfer(download, [download.data.buffer]);
   },
   async exportStep(job: Job): Promise<ArrayBuffer> {

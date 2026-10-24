@@ -10,9 +10,9 @@ export function LibraryPanel() {
   const [system, setSystem] = useState<GameSystem>('Warhammer 40k');
 
   return (
-    <Section title="Game library">
+    <Section title="Library">
       <Select
-        label="Game system"
+        label="Category"
         value={system}
         options={GAME_SYSTEMS.map((name) => ({ value: name, label: name }))}
         onChange={(value) => setSystem(value as GameSystem)}

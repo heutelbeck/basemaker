@@ -5,6 +5,7 @@ import { PreviewCanvas } from './preview/PreviewCanvas.tsx';
 import { bootstrapGeometry, useAppStore } from './state/store.ts';
 import { Select } from './ui/controls/Select.tsx';
 import { CrystalPanel, PlantsPanel, RockPanel } from './ui/panels/DecorPanels.tsx';
+import { BaseplatePanel } from './ui/panels/BaseplatePanel.tsx';
 import { PaintRackPanel } from './ui/panels/PaintRackPanel.tsx';
 import { RulerPanel } from './ui/panels/RulerPanel.tsx';
 import { TemplatePanel } from './ui/panels/TemplatePanel.tsx';
@@ -30,6 +31,11 @@ export function App() {
   const generator = useAppStore((state) => state.job.generator);
   const overhangOverlay = useAppStore((state) => state.overhangOverlay);
   const showOverhangs = useAppStore((state) => state.showOverhangs);
+  const loadCount = useAppStore((state) => state.loadCount);
+  // Drawer layouts put their front at +Y, the drawer opening.
+  const frontAtPlusY = useAppStore(
+    (state) => state.job.generator === 'paintRack' || state.job.generator === 'baseplate',
+  );
   const toggleOverhangs = useAppStore((state) => state.toggleOverhangs);
   const showMockParts = useAppStore((state) => state.showMockParts);
   const toggleMockParts = useAppStore((state) => state.toggleMockParts);
@@ -58,7 +64,7 @@ export function App() {
       <aside id="settings" className="sidebar">
         <header className="app-header">
           <h1>Basemaker</h1>
-          <p>Parametric miniature bases, printable smooth</p>
+          <p>Bases, trays, terrain, templates and Gridfinity paint storage, all parametric</p>
         </header>
         <Select
           label="Generator"
@@ -93,6 +99,7 @@ export function App() {
         <RulerPanel />
         <TemplatePanel />
         <PaintRackPanel />
+        <BaseplatePanel />
         <ExportPanel />
         <LibraryPanel />
         <CollectionPanel />
@@ -102,6 +109,8 @@ export function App() {
           parts={visibleParts}
           overhangOverlay={overhangOverlay}
           showOverhangs={showOverhangs}
+          loadCount={loadCount}
+          frontAtPlusY={frontAtPlusY}
         />
         {busy && <div className="busy-badge">Rebuilding</div>}
         {issues.length > 0 && (

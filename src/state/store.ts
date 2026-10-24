@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Job, JobPart, JobStats } from '../generators/job.ts';
-import type { RackDownload } from '../export/paintRackZip.ts';
+import type { PartsDownload } from '../export/partsDownload.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
 import { defaultJob, validateJob } from '../generators/job.ts';
 import type { BaseParams } from '../params/types.ts';
@@ -18,6 +18,8 @@ export interface AppState {
   showMockParts: boolean;
   busy: boolean;
   buildError: string | null;
+  /** Counts loaded jobs, so the preview can frame each newly loaded model. */
+  loadCount: number;
   setJob: (update: (job: Job) => Job) => void;
   replaceJob: (job: Job) => void;
   toggleOverhangs: () => void;
@@ -64,11 +66,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   showMockParts: true,
   busy: false,
   buildError: null,
+  loadCount: 0,
   setJob: (update) => {
     set(applyJob(update(get().job)));
   },
   replaceJob: (job) => {
-    set(applyJob(job));
+    set({ ...applyJob(job), loadCount: get().loadCount + 1 });
   },
   toggleOverhangs: () => {
     set({ showOverhangs: !get().showOverhangs });
@@ -130,8 +133,8 @@ export function exportThreeMfExploded(job: Job): Promise<Uint8Array> {
   return geometryClient().exportThreeMfExploded(job);
 }
 
-export function exportRackStls(job: Job): Promise<RackDownload> {
-  return geometryClient().exportRackStls(job);
+export function exportPartStls(job: Job): Promise<PartsDownload> {
+  return geometryClient().exportPartStls(job);
 }
 
 /**

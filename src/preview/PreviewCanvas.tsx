@@ -12,6 +12,8 @@ import {
   MeshStandardMaterial,
   PerspectiveCamera,
   Scene,
+  Sphere,
+  Vector3,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -23,6 +25,10 @@ interface PreviewCanvasProps {
   parts: JobPart[] | null;
   overhangOverlay: RawMesh | null;
   showOverhangs: boolean;
+  /** Changes whenever a job is loaded; the next model shown is framed anew. */
+  loadCount: number;
+  /** The model's front faces +Y, so the camera frames it from that side. */
+  frontAtPlusY: boolean;
 }
 
 interface PreviewScene {
@@ -32,10 +38,23 @@ interface PreviewScene {
   controls: OrbitControls;
   partGroup: Group;
   overlayGroup: Group;
+  grid: GridHelper;
+  gridSize: number;
   framed: boolean;
+  frontAtPlusY: boolean;
 }
 
 const BODY_PREVIEW_COLOR = 0xc8ccd4;
+/** The floor grid: 10 mm cells, at least this size, grown in steps for larger models. */
+const GRID_CELL_MM = 10;
+const GRID_MIN_MM = 200;
+const GRID_STEP_MM = 100;
+/** View direction for framing a model whose front faces -Y: from the front right, above. */
+const FRAME_DIRECTION = new Vector3(1, -1, 0.9).normalize();
+/** The same view for a model whose front faces +Y. */
+const FRAME_DIRECTION_PLUS_Y = new Vector3(-1, 1, 0.9).normalize();
+/** Room left around a framed model. */
+const FRAME_MARGIN = 1.1;
 /** Mock parts such as preview bottles stay see-through so the model shows. */
 const MOCK_OPACITY = 0.55;
 
@@ -58,8 +77,7 @@ function createPreviewScene(container: HTMLDivElement): PreviewScene {
   fill.position.set(-50, 60, 30);
   scene.add(ambient, key, fill);
 
-  const grid = new GridHelper(200, 20, 0x3a4048, 0x272c33);
-  grid.rotation.x = Math.PI / 2;
+  const grid = floorGrid(GRID_MIN_MM);
   scene.add(grid);
 
   const partGroup = new Group();
@@ -71,7 +89,61 @@ function createPreviewScene(container: HTMLDivElement): PreviewScene {
   controls.enableDamping = true;
   controls.target.set(0, 0, 2);
 
-  return { renderer, scene, camera, controls, partGroup, overlayGroup, framed: false };
+  return {
+    renderer,
+    scene,
+    camera,
+    controls,
+    partGroup,
+    overlayGroup,
+    grid,
+    gridSize: GRID_MIN_MM,
+    framed: false,
+    frontAtPlusY: false,
+  };
+}
+
+function floorGrid(size: number): GridHelper {
+  const grid = new GridHelper(size, size / GRID_CELL_MM, 0x3a4048, 0x272c33);
+  grid.rotation.x = Math.PI / 2;
+  return grid;
+}
+
+/** Grows the floor grid so it reaches past the model's footprint around the origin. */
+function fitGrid(preview: PreviewScene, box: Box3): void {
+  const reach = Math.max(
+    Math.abs(box.min.x),
+    Math.abs(box.max.x),
+    Math.abs(box.min.y),
+    Math.abs(box.max.y),
+  );
+  const size = Math.max(
+    GRID_MIN_MM,
+    Math.ceil((2 * reach * FRAME_MARGIN) / GRID_STEP_MM) * GRID_STEP_MM,
+  );
+  if (size === preview.gridSize) {
+    return;
+  }
+  preview.scene.remove(preview.grid);
+  preview.grid.dispose();
+  preview.grid = floorGrid(size);
+  preview.gridSize = size;
+  preview.scene.add(preview.grid);
+}
+
+/** Points the camera at the model from far enough that all of it is on screen. */
+function frameModel(preview: PreviewScene, box: Box3): void {
+  const { camera, controls } = preview;
+  const radius = Math.max(box.getBoundingSphere(new Sphere()).radius, 10);
+  const vertical = (camera.fov * Math.PI) / 180;
+  const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect);
+  const distance = (radius * FRAME_MARGIN) / Math.sin(Math.min(vertical, horizontal) / 2);
+  box.getCenter(controls.target);
+  camera.position
+    .copy(controls.target)
+    .addScaledVector(preview.frontAtPlusY ? FRAME_DIRECTION_PLUS_Y : FRAME_DIRECTION, distance);
+  camera.far = Math.max(2000, distance * 4);
+  camera.updateProjectionMatrix();
 }
 
 function disposeParts(group: Group): void {
@@ -85,7 +157,13 @@ function disposeParts(group: Group): void {
   }
 }
 
-export function PreviewCanvas({ parts, overhangOverlay, showOverhangs }: PreviewCanvasProps) {
+export function PreviewCanvas({
+  parts,
+  overhangOverlay,
+  showOverhangs,
+  loadCount,
+  frontAtPlusY,
+}: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<PreviewScene | null>(null);
 
@@ -153,15 +231,29 @@ export function PreviewCanvas({ parts, overhangOverlay, showOverhangs }: Preview
       });
       preview.partGroup.add(new Mesh(toBufferGeometry(part.mesh), material));
     });
-    if (!preview.framed && parts.length > 0) {
+    if (parts.length > 0) {
       const box = new Box3().setFromObject(preview.partGroup);
-      const radius = Math.max(box.getSize(preview.camera.position.clone()).length() / 2, 10);
-      const distance = radius * 2.6;
-      preview.camera.position.set(distance, -distance, distance * 0.9);
-      box.getCenter(preview.controls.target);
-      preview.framed = true;
+      fitGrid(preview, box);
+      if (!preview.framed) {
+        frameModel(preview, box);
+        preview.framed = true;
+      }
     }
   }, [parts]);
+
+  useEffect(() => {
+    const preview = sceneRef.current;
+    if (preview !== null) {
+      preview.framed = false;
+    }
+  }, [loadCount]);
+
+  useEffect(() => {
+    const preview = sceneRef.current;
+    if (preview !== null) {
+      preview.frontAtPlusY = frontAtPlusY;
+    }
+  }, [frontAtPlusY]);
 
   useEffect(() => {
     const preview = sceneRef.current;
