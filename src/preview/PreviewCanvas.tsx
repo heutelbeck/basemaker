@@ -224,8 +224,9 @@ export function PreviewCanvas({
         roughness: isBody ? 0.65 : 0.5,
         transparent: mock,
         opacity: mock ? MOCK_OPACITY : 1,
-        depthWrite: !mock,
-        polygonOffset: index > 0,
+        // Mock parts never share faces with the model: they take no offset
+        // and keep depth, so nearer bottles hide those behind them.
+        polygonOffset: !mock && index > 0,
         polygonOffsetFactor: 0,
         polygonOffsetUnits: -4 * index,
       });
