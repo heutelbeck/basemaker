@@ -55,10 +55,7 @@ export function heightfieldBlock(
       }
     }
   }
-  const skirt = (
-    edge: (k: number) => [number, number],
-    flip: boolean,
-  ) => {
+  const skirt = (edge: (k: number) => [number, number], flip: boolean) => {
     for (let k = 0; k < n; k++) {
       const [i1, j1] = edge(k);
       const [i2, j2] = edge(k + 1);
@@ -86,4 +83,3 @@ export function heightfieldBlock(
   mesh.merge();
   return track(wasm.Manifold.ofMesh(mesh));
 }
-

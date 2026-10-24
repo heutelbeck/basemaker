@@ -35,9 +35,7 @@ export function FacingMarkersPanel() {
       return;
     }
     update({
-      markers: facing.markers.map((marker, i) =>
-        i === index ? { ...marker, ...change } : marker,
-      ),
+      markers: facing.markers.map((marker, i) => (i === index ? { ...marker, ...change } : marker)),
     });
   };
 
@@ -69,9 +67,7 @@ export function FacingMarkersPanel() {
                 <button
                   type="button"
                   title="Remove this marker."
-                  onClick={() =>
-                    update({ markers: facing.markers.filter((_, i) => i !== index) })
-                  }
+                  onClick={() => update({ markers: facing.markers.filter((_, i) => i !== index) })}
                 >
                   Remove
                 </button>

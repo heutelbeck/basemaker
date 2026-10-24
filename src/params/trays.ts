@@ -143,12 +143,13 @@ const ERROR_TRAY_CELL_TOO_SMALL =
 /**
  * Default tray magnets: 6 x 2 mm discs spread evenly over the underside,
  * one per five bases, so the loaded tray holds to a steel transport sheet.
+ * The slot is 6.1 mm wide so the nominal 6 mm magnet presses in.
  */
 export function defaultTrayMagnets(pocketCount: number): MagnetParams {
   return {
     shape: 'round',
     layout: 'even',
-    diameter: 6,
+    diameter: 6.1,
     length: 5,
     width: 5,
     depth: 2,

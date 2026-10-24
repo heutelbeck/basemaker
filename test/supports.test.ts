@@ -8,7 +8,12 @@ import { defaultParams } from '../src/params/types.ts';
 import { validate } from '../src/params/validate.ts';
 
 function hollow(overrides: Partial<HollowParams> = {}): HollowParams {
-  return { wall: 2, topThickness: 1.2, supports: { style: 'pillars', spacing: 15, diameter: 3 }, ...overrides };
+  return {
+    wall: 2,
+    topThickness: 1.2,
+    supports: { style: 'pillars', spacing: 15, diameter: 3 },
+    ...overrides,
+  };
 }
 
 function params(overrides: Partial<BaseParams>): BaseParams {

@@ -1,9 +1,11 @@
 import { expose, transfer } from 'comlink';
+import type { RackDownload } from '../export/paintRackZip.ts';
+import { paintRackDownload } from '../export/paintRackZip.ts';
 import { writeBinaryStl } from '../export/stlBinary.ts';
 import type { ThreeMfPart } from '../export/threeMf.ts';
 import { writeThreeMfParts } from '../export/threeMf.ts';
-import type { Job, JobBundle } from '../generators/job.ts';
-import { buildJobBundle, buildJobMesh, buildJobStep } from '../generators/job.ts';
+import type { Job, JobBundle, JobPart } from '../generators/job.ts';
+import { buildJobBundle, buildJobMesh, buildJobStep, jobFilename } from '../generators/job.ts';
 import { registerLocalFont } from '../geometry/lettering/font.ts';
 import { getManifold } from '../geometry/manifoldContext.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
@@ -11,6 +13,8 @@ import { explodeParts } from '../geometry/overhang.ts';
 import { toManifoldMesh, toRawMesh } from '../geometry/mesh.ts';
 
 export type BuildOutput = JobBundle;
+
+const ERROR_RACK_ZIP_ONLY_PAINT_RACKS = 'Per-rack STL downloads exist only for paint racks.';
 
 /**
  * The last built parts, kept with copied buffers so mesh exports of the
@@ -23,9 +27,11 @@ function copyMesh(mesh: RawMesh): RawMesh {
   return { positions: mesh.positions.slice(), indices: mesh.indices.slice() };
 }
 
-function rememberParts(job: Job, parts: ThreeMfPart[]): void {
+function rememberParts(job: Job, parts: JobPart[]): void {
   cachedJobKey = JSON.stringify(job);
-  cachedParts = parts.map((part) => ({ ...part, mesh: copyMesh(part.mesh) }));
+  cachedParts = parts
+    .filter((part) => part.previewOnly !== true)
+    .map(({ name, colorHex, mesh, group }) => ({ name, colorHex, group, mesh: copyMesh(mesh) }));
 }
 
 async function partsFor(job: Job): Promise<ThreeMfPart[]> {
@@ -58,7 +64,9 @@ const api = {
   async exportStl(job: Job): Promise<ArrayBuffer> {
     const wasm = await getManifold();
     if (cachedParts !== null && cachedJobKey === JSON.stringify(job)) {
-      const solids = cachedParts.map((part) => wasm.Manifold.ofMesh(toManifoldMesh(wasm, part.mesh)));
+      const solids = cachedParts.map((part) =>
+        wasm.Manifold.ofMesh(toManifoldMesh(wasm, part.mesh)),
+      );
       const union = wasm.Manifold.union(solids);
       try {
         const buffer = writeBinaryStl(toRawMesh(union));
@@ -86,8 +94,23 @@ const api = {
   async exportThreeMfExploded(job: Job): Promise<Uint8Array> {
     const parts = await partsFor(job);
     const exploded = explodeParts(parts);
-    const packed = writeThreeMfParts(parts.map((part, index) => ({ ...part, mesh: exploded[index] })));
+    const packed = writeThreeMfParts(
+      parts.map((part, index) => ({ ...part, mesh: exploded[index] })),
+    );
     return transfer(packed, [packed.buffer]);
+  },
+  /**
+   * The distinct racks of a paint rack drawer, each centered on the origin
+   * for printing: a plain STL, or a ZIP when there are several.
+   */
+  async exportRackStls(job: Job): Promise<RackDownload> {
+    if (job.generator !== 'paintRack') {
+      throw new Error(ERROR_RACK_ZIP_ONLY_PAINT_RACKS);
+    }
+    const wasm = await getManifold();
+    const stem = jobFilename(job, 'zip').replace(/\.zip$/, '');
+    const download = paintRackDownload(wasm, job.params, stem);
+    return transfer(download, [download.data.buffer]);
   },
   async exportStep(job: Job): Promise<ArrayBuffer> {
     const { ensureOcct } = await import('../geometry/step/occtContext.ts');

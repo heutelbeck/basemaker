@@ -124,9 +124,7 @@ if (process.argv[2] === '--smoke') {
         shape: { kind: 'round', diameter: 40 },
         hollow: { wall: 1.1, topThickness: 1, supports: null },
         mountingHoles: {
-          holes: [
-            { shape: 'hex', sizeMm: 5, offsetX: 0, offsetY: 0, rotationDeg: 0, rimMm: 1.5 },
-          ],
+          holes: [{ shape: 'hex', sizeMm: 5, offsetX: 0, offsetY: 0, rotationDeg: 0, rimMm: 1.5 }],
         },
       },
     ],
@@ -221,7 +219,15 @@ if (process.argv[2] === '--smoke') {
       {
         ...defaultParams(),
         shape: { kind: 'round', diameter: 40 },
-        plaque: { style: 'plate', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.7, rivetHeightMm: 0.2, colorHex: '#9AA5B1' },
+        plaque: {
+          style: 'plate',
+          widthMm: 16,
+          heightMm: 2.4,
+          angleDeg: -90,
+          thicknessMm: 0.7,
+          rivetHeightMm: 0.2,
+          colorHex: '#9AA5B1',
+        },
       },
     ],
     [
@@ -229,7 +235,15 @@ if (process.argv[2] === '--smoke') {
       {
         ...defaultParams(),
         shape: { kind: 'round', diameter: 40 },
-        plaque: { style: 'scroll', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1' },
+        plaque: {
+          style: 'scroll',
+          widthMm: 16,
+          heightMm: 2.4,
+          angleDeg: -90,
+          thicknessMm: 0.4,
+          rivetHeightMm: 0.2,
+          colorHex: '#9AA5B1',
+        },
       },
     ],
     [
@@ -237,7 +251,16 @@ if (process.argv[2] === '--smoke') {
       {
         ...defaultParams(),
         shape: { kind: 'round', diameter: 40 },
-        plaque: { style: 'scroll', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1', text: plaqueText },
+        plaque: {
+          style: 'scroll',
+          widthMm: 16,
+          heightMm: 2.4,
+          angleDeg: -90,
+          thicknessMm: 0.4,
+          rivetHeightMm: 0.2,
+          colorHex: '#9AA5B1',
+          text: plaqueText,
+        },
       },
     ],
     [
@@ -250,7 +273,11 @@ if (process.argv[2] === '--smoke') {
         lipRadius: 4.8,
         lipTopRadius: 1.4,
         recess: { depth: 0.5, inset: 0.35 },
-        hollow: { wall: 1.1, topThickness: 2, supports: { style: 'grid', spacing: 8, diameter: 1.2 } },
+        hollow: {
+          wall: 1.1,
+          topThickness: 2,
+          supports: { style: 'grid', spacing: 8, diameter: 1.2 },
+        },
       },
     ],
     [
@@ -258,8 +285,26 @@ if (process.argv[2] === '--smoke') {
       {
         ...defaultParams(),
         shape: { kind: 'round', diameter: 40 },
-        plaque: { style: 'plate', widthMm: 16, heightMm: 2.4, angleDeg: -90, thicknessMm: 0.7, rivetHeightMm: 0.2, colorHex: '#9AA5B1', text: plaqueText },
-        plaqueBack: { style: 'scroll', widthMm: 12, heightMm: 2.4, angleDeg: 90, thicknessMm: 0.4, rivetHeightMm: 0.2, colorHex: '#9AA5B1', text: { ...plaqueText, text: '7' } },
+        plaque: {
+          style: 'plate',
+          widthMm: 16,
+          heightMm: 2.4,
+          angleDeg: -90,
+          thicknessMm: 0.7,
+          rivetHeightMm: 0.2,
+          colorHex: '#9AA5B1',
+          text: plaqueText,
+        },
+        plaqueBack: {
+          style: 'scroll',
+          widthMm: 12,
+          heightMm: 2.4,
+          angleDeg: 90,
+          thicknessMm: 0.4,
+          rivetHeightMm: 0.2,
+          colorHex: '#9AA5B1',
+          text: { ...plaqueText, text: '7' },
+        },
       },
     ],
     [

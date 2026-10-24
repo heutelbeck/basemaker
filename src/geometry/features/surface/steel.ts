@@ -57,7 +57,10 @@ export function buildSteelPlates(
       } else if (surface.detail === 'tread' || surface.detail === 'diamond') {
         const treadPitch = 3.4;
         const margin = 1.6;
-        const rowCount = Math.max(1, Math.floor((surface.plateSize - 2 * margin) / (treadPitch / 2)) + 1);
+        const rowCount = Math.max(
+          1,
+          Math.floor((surface.plateSize - 2 * margin) / (treadPitch / 2)) + 1,
+        );
         const rowStart = y + (surface.plateSize - (rowCount - 1) * (treadPitch / 2)) / 2;
         for (let treadRow = 0; treadRow < rowCount; treadRow++) {
           const ty = rowStart + treadRow * (treadPitch / 2);

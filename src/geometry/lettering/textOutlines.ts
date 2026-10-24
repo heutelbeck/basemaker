@@ -7,7 +7,6 @@ import type { Point2 } from '../../params/tessellation.ts';
 const CAP_HEIGHT_RATIO = 0.72;
 const CURVE_STEPS = 8;
 
-
 export interface GlyphContour {
   points: Point2[];
   isHole: boolean;
@@ -200,11 +199,7 @@ export function glyphVerticalCenter(layouts: GlyphLayout[]): number {
  * natural advances, the whole text centered on the origin with the
  * baseline at y = 0. Used for labels that are not wrapped on an arc.
  */
-export function textLineContourGroups(
-  font: Font,
-  text: string,
-  sizeMm: number,
-): GlyphContour[][] {
+export function textLineContourGroups(font: Font, text: string, sizeMm: number): GlyphContour[][] {
   const fontSize = sizeMm / CAP_HEIGHT_RATIO;
   const scale = fontSize / font.unitsPerEm;
   const glyphs = [...text].map((char) => font.charToGlyph(char));

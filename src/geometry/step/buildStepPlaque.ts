@@ -44,12 +44,7 @@ function slabLoft(params: BaseParams, spec: PlaqueSlabSpec, sections: number): S
     const u = i / sections;
     const s = spec.sStart + spec.width * u;
     const { zTop, zBottom, proud } = spec.at(u);
-    const signature = [
-      ...spec.frame.pointAt(s),
-      zTop,
-      zBottom,
-      proud,
-    ];
+    const signature = [...spec.frame.pointAt(s), zTop, zBottom, proud];
     const same =
       previous !== null &&
       signature.every((value, index) => Math.abs(value - (previous as number[])[index]) < 1e-4);

@@ -4,6 +4,7 @@ import { jobFilename } from '../../generators/job.ts';
 import { freeformOutline } from '../../params/freeform.ts';
 import { resolveShape } from '../../params/shapeMetrics.ts';
 import {
+  exportRackStls,
   exportStep,
   exportStl,
   exportThreeMf,
@@ -33,6 +34,7 @@ const EXPORT_LABELS = {
   '3mf': '3MF',
   step: 'STEP',
   '3mf-exploded': 'exploded 3MF',
+  'rack-stl': 'rack STLs',
 } as const;
 
 export function ExportPanel() {
@@ -41,7 +43,9 @@ export function ExportPanel() {
   const stats = useAppStore((state) => state.stats);
   const busy = useAppStore((state) => state.busy);
   const buildError = useAppStore((state) => state.buildError);
-  const partCount = useAppStore((state) => state.parts?.length ?? 0);
+  const partCount = useAppStore(
+    (state) => state.parts?.filter((part) => part.previewOnly !== true).length ?? 0,
+  );
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -62,6 +66,7 @@ export function ExportPanel() {
   }, [exporting]);
 
   const blocked = issues.length > 0 || exporting !== null;
+  const paintRack = job.generator === 'paintRack';
 
   const tol = job.params.quality.chordTolMm;
   const sliderValue = Math.log10(tol);
@@ -77,7 +82,7 @@ export function ExportPanel() {
     return outlineFor(resolveShape(outerSpec), tol).length;
   })();
 
-  const runExport = async (format: 'stl' | '3mf' | 'step' | '3mf-exploded') => {
+  const runExport = async (format: keyof typeof EXPORT_LABELS) => {
     setExporting(EXPORT_LABELS[format]);
     setExportError(null);
     try {
@@ -88,6 +93,10 @@ export function ExportPanel() {
         const packed = await exportThreeMf(job);
         const copy = new Uint8Array(packed);
         downloadBlob(copy, jobFilename(job, '3mf'), 'model/3mf');
+      } else if (format === 'rack-stl') {
+        const { data, extension } = await exportRackStls(job);
+        const type = extension === 'zip' ? 'application/zip' : 'model/stl';
+        downloadBlob(new Uint8Array(data), jobFilename(job, extension), type);
       } else if (format === '3mf-exploded') {
         const packed = await exportThreeMfExploded(job);
         const copy = new Uint8Array(packed);
@@ -138,22 +147,42 @@ export function ExportPanel() {
         {segmentReadout !== null && `, ${segmentReadout} outline segments`}
       </p>
       <div className="export-buttons">
-        <button type="button" disabled={blocked} onClick={() => void runExport('stl')}>
-          Download STL
-        </button>
-        <button type="button" disabled={blocked} onClick={() => void runExport('3mf')}>
+        {paintRack ? (
+          <button
+            type="button"
+            disabled={blocked}
+            title="One STL per distinct rack, each centered for printing and named with how many to print; several come as a ZIP."
+            onClick={() => void runExport('rack-stl')}
+          >
+            Download STL
+          </button>
+        ) : (
+          <button type="button" disabled={blocked} onClick={() => void runExport('stl')}>
+            Download STL
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={blocked || paintRack}
+          title={paintRack ? 'Paint racks download as STL only.' : undefined}
+          onClick={() => void runExport('3mf')}
+        >
           Download 3MF
         </button>
         <button
           type="button"
-          disabled={blocked}
-          title="True curves via the OCCT kernel. The first STEP export loads an 11 MB module."
+          disabled={blocked || paintRack}
+          title={
+            paintRack
+              ? 'Paint racks download as STL only.'
+              : 'True curves via the OCCT kernel. The first STEP export loads an 11 MB module.'
+          }
           onClick={() => void runExport('step')}
         >
           Download STEP
         </button>
       </div>
-      {partCount > 1 && (
+      {!paintRack && partCount > 1 && (
         <button
           type="button"
           disabled={blocked}
@@ -164,9 +193,9 @@ export function ExportPanel() {
         </button>
       )}
       <p className="freeform-hint">
-        STL and 3MF are tessellated at this resolution; the chord tolerance applies to every curved
-        feature, including magnet slots, holders, and support pillars. STEP always exports true
-        curves and is smooth at any setting.
+        {paintRack
+          ? 'The STL is tessellated at this resolution.'
+          : 'STL and 3MF are tessellated at this resolution; the chord tolerance applies to every curved feature, including magnet slots, holders, and support pillars. STEP always exports true curves and is smooth at any setting.'}
       </p>
       {exporting !== null && (
         <div className="export-progress" role="status">

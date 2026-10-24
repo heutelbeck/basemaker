@@ -13,9 +13,7 @@ export function SurfacePanel() {
     setBaseParams((current) => ({
       ...current,
       surface:
-        current.surface === null
-          ? null
-          : ({ ...current.surface, ...change } as SurfaceParams),
+        current.surface === null ? null : ({ ...current.surface, ...change } as SurfaceParams),
     }));
   };
 
@@ -109,44 +107,44 @@ export function SurfacePanel() {
           )}
           {surface.type === 'planks' && (
             <>
-            <div className="field-row">
-              <NumberField
-                label="Plank width"
-                unit="mm"
-                value={surface.plankWidth}
-                min={2}
-                step={0.5}
-                onChange={(plankWidth) => update({ plankWidth })}
+              <div className="field-row">
+                <NumberField
+                  label="Plank width"
+                  unit="mm"
+                  value={surface.plankWidth}
+                  min={2}
+                  step={0.5}
+                  onChange={(plankWidth) => update({ plankWidth })}
+                />
+                <NumberField
+                  label="Gap"
+                  unit="mm"
+                  value={surface.gap}
+                  min={0.2}
+                  step={0.1}
+                  onChange={(gap) => update({ gap })}
+                />
+                <NumberField
+                  label="Relief"
+                  unit="mm"
+                  value={surface.reliefHeight}
+                  min={0.2}
+                  step={0.1}
+                  onChange={(reliefHeight) => update({ reliefHeight })}
+                />
+                <NumberField
+                  label="Angle"
+                  unit="deg"
+                  value={surface.angleDeg}
+                  step={15}
+                  onChange={(angleDeg) => update({ angleDeg })}
+                />
+              </div>
+              <Toggle
+                label="Engraved wood grain"
+                checked={surface.grain}
+                onChange={(grain) => update({ grain })}
               />
-              <NumberField
-                label="Gap"
-                unit="mm"
-                value={surface.gap}
-                min={0.2}
-                step={0.1}
-                onChange={(gap) => update({ gap })}
-              />
-              <NumberField
-                label="Relief"
-                unit="mm"
-                value={surface.reliefHeight}
-                min={0.2}
-                step={0.1}
-                onChange={(reliefHeight) => update({ reliefHeight })}
-              />
-              <NumberField
-                label="Angle"
-                unit="deg"
-                value={surface.angleDeg}
-                step={15}
-                onChange={(angleDeg) => update({ angleDeg })}
-              />
-            </div>
-            <Toggle
-              label="Engraved wood grain"
-              checked={surface.grain}
-              onChange={(grain) => update({ grain })}
-            />
             </>
           )}
           {surface.type === 'pond' && (

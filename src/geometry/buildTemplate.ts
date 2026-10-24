@@ -37,10 +37,7 @@ function templateOutline(
  * The template plate and its accent frame inlay. The caller owns the
  * returned manifolds.
  */
-export function buildTemplateParts(
-  wasm: ManifoldToplevel,
-  params: TemplateParams,
-): TemplatePart[] {
+export function buildTemplateParts(wasm: ManifoldToplevel, params: TemplateParams): TemplatePart[] {
   return withGeometryScope((track) => {
     const outline = templateOutline(wasm, track, params);
     let body = track(wasm.Manifold.extrude(outline, params.thicknessMm));

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { GeneratorId } from './generators/job.ts';
 import { GENERATOR_LABELS, defaultJobFor } from './generators/job.ts';
 import { PreviewCanvas } from './preview/PreviewCanvas.tsx';
 import { bootstrapGeometry, useAppStore } from './state/store.ts';
 import { Select } from './ui/controls/Select.tsx';
 import { CrystalPanel, PlantsPanel, RockPanel } from './ui/panels/DecorPanels.tsx';
+import { PaintRackPanel } from './ui/panels/PaintRackPanel.tsx';
 import { RulerPanel } from './ui/panels/RulerPanel.tsx';
 import { TemplatePanel } from './ui/panels/TemplatePanel.tsx';
 import { AdapterTrayPanel, MovementTrayPanel } from './ui/panels/TrayPanels.tsx';
@@ -30,6 +31,13 @@ export function App() {
   const overhangOverlay = useAppStore((state) => state.overhangOverlay);
   const showOverhangs = useAppStore((state) => state.showOverhangs);
   const toggleOverhangs = useAppStore((state) => state.toggleOverhangs);
+  const showMockParts = useAppStore((state) => state.showMockParts);
+  const toggleMockParts = useAppStore((state) => state.toggleMockParts);
+  const hasMockParts = parts?.some((part) => part.previewOnly === true) ?? false;
+  const visibleParts = useMemo(
+    () => (showMockParts ? parts : (parts?.filter((part) => part.previewOnly !== true) ?? null)),
+    [parts, showMockParts],
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -84,13 +92,14 @@ export function App() {
         <PlantsPanel />
         <RulerPanel />
         <TemplatePanel />
+        <PaintRackPanel />
         <ExportPanel />
         <LibraryPanel />
         <CollectionPanel />
       </aside>
       <main className="viewport">
         <PreviewCanvas
-          parts={parts}
+          parts={visibleParts}
           overhangOverlay={overhangOverlay}
           showOverhangs={showOverhangs}
         />
@@ -104,6 +113,12 @@ export function App() {
           <div className="dims-badge">
             {stats.sizeX.toFixed(1)} x {stats.sizeY.toFixed(1)} x {stats.sizeZ.toFixed(1)} mm
           </div>
+        )}
+        {hasMockParts && (
+          <label className="overhang-toggle mock-toggle">
+            <input type="checkbox" checked={showMockParts} onChange={toggleMockParts} />
+            <span>Bottles</span>
+          </label>
         )}
         <label className="overhang-toggle">
           <input type="checkbox" checked={showOverhangs} onChange={toggleOverhangs} />

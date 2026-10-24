@@ -40,7 +40,13 @@ function lettering(overrides: Partial<LetteringParams> = {}): LetteringParams {
 }
 
 function params(overrides: Partial<BaseParams>): BaseParams {
-  return { ...defaultParams(), height: 4, edgeSlope: 1.5, shape: { kind: 'round', diameter: 40 }, ...overrides };
+  return {
+    ...defaultParams(),
+    height: 4,
+    edgeSlope: 1.5,
+    shape: { kind: 'round', diameter: 40 },
+    ...overrides,
+  };
 }
 
 describe('text contours', () => {
@@ -196,10 +202,7 @@ describe('lettering styles and placements', () => {
     expect(letters).not.toBeNull();
     if (letters !== null) {
       expect(letters.volume()).toBeGreaterThan(0);
-      expect(lettered[0].solid.volume() + letters.volume()).toBeCloseTo(
-        plain[0].solid.volume(),
-        1,
-      );
+      expect(lettered[0].solid.volume() + letters.volume()).toBeCloseTo(plain[0].solid.volume(), 1);
       letters.delete();
     }
     plain[0].solid.delete();

@@ -25,19 +25,22 @@ async function volumeOf(surface: SurfaceParams | null): Promise<number> {
 }
 
 describe('surface textures', () => {
-  it.each(['cobblestone', 'planks'] as const)('raises %s relief above the top face', async (type) => {
-    const wasm = await getManifold();
-    const plain = await volumeOf(null);
-    const textured = buildBase(wasm, params({ surface: defaultSurfaceParams(type) }));
-    expect(textured.status()).toBe('NoError');
-    expect(textured.volume()).toBeGreaterThan(plain);
-    const box = textured.boundingBox();
-    expect(box.max[2]).toBeGreaterThan(4.2);
-    expect(box.max[2]).toBeLessThanOrEqual(4 + 0.9);
-    expect(box.max[0]).toBeLessThanOrEqual(25.01);
-    expect(box.max[1]).toBeLessThanOrEqual(25.01);
-    textured.delete();
-  });
+  it.each(['cobblestone', 'planks'] as const)(
+    'raises %s relief above the top face',
+    async (type) => {
+      const wasm = await getManifold();
+      const plain = await volumeOf(null);
+      const textured = buildBase(wasm, params({ surface: defaultSurfaceParams(type) }));
+      expect(textured.status()).toBe('NoError');
+      expect(textured.volume()).toBeGreaterThan(plain);
+      const box = textured.boundingBox();
+      expect(box.max[2]).toBeGreaterThan(4.2);
+      expect(box.max[2]).toBeLessThanOrEqual(4 + 0.9);
+      expect(box.max[0]).toBeLessThanOrEqual(25.01);
+      expect(box.max[1]).toBeLessThanOrEqual(25.01);
+      textured.delete();
+    },
+  );
 
   it('carves a pond bowl below the face while raising a bank above it', async () => {
     const wasm = await getManifold();

@@ -50,7 +50,6 @@ export function validateTemplate(params: TemplateParams): ValidationIssue[] {
       params.lengthMm > params.widthMm &&
       params.tipMm >= 5 &&
       params.tipMm < params.widthMm);
-  const valid =
-    roundValid && teardropValid && params.thicknessMm >= 1 && params.thicknessMm <= 6;
+  const valid = roundValid && teardropValid && params.thicknessMm >= 1 && params.thicknessMm <= 6;
   return valid ? [] : [{ code: 'template-params', message: ERROR_TEMPLATE_INVALID }];
 }

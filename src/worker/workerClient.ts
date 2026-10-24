@@ -1,5 +1,6 @@
 import { transfer, wrap } from 'comlink';
 import type { Remote } from 'comlink';
+import type { RackDownload } from '../export/paintRackZip.ts';
 import type { Job } from '../generators/job.ts';
 import type { BuildOutput, GeometryWorkerApi } from './geometryWorker.ts';
 
@@ -53,6 +54,10 @@ export class GeometryClient {
 
   exportStep(job: Job): Promise<ArrayBuffer> {
     return this.api.exportStep(job);
+  }
+
+  exportRackStls(job: Job): Promise<RackDownload> {
+    return this.api.exportRackStls(job);
   }
 
   exportThreeMfExploded(job: Job): Promise<Uint8Array> {

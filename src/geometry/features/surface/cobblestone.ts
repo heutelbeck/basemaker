@@ -33,15 +33,11 @@ export function buildCobblestones(
   const warp = makeWarpField(surface.seed, surface.stoneSize * 0.13, surface.stoneSize * 1.9);
   const granite = makeNoise2d(surface.seed * 53 + 29);
   const stoneField =
-    surface.pattern === 'fan'
-      ? fanStoneField(surface, rng)
-      : polygonStoneField(surface, face, rng);
+    surface.pattern === 'fan' ? fanStoneField(surface, rng) : polygonStoneField(surface, face, rng);
   if (stoneField === null) {
     return { add: null, cut: null };
   }
-  const bevel = surface.domed
-    ? surface.stoneSize * 0.38
-    : Math.max(surface.stoneSize * 0.12, 0.35);
+  const bevel = surface.domed ? surface.stoneSize * 0.38 : Math.max(surface.stoneSize * 0.12, 0.35);
   const heightAt = (x: number, y: number): number => {
     const [qx, qy] = warp.displace(x, y);
     const sample = stoneField(qx, qy);
@@ -139,8 +135,16 @@ function polygonStoneField(
   const buckets = new Map<string, StoneMeta[]>();
   const bucketKey = (bx: number, by: number) => `${bx},${by}`;
   for (const stone of stones) {
-    for (let bx = Math.floor(stone.minX / bucketSize); bx <= Math.floor(stone.maxX / bucketSize); bx++) {
-      for (let by = Math.floor(stone.minY / bucketSize); by <= Math.floor(stone.maxY / bucketSize); by++) {
+    for (
+      let bx = Math.floor(stone.minX / bucketSize);
+      bx <= Math.floor(stone.maxX / bucketSize);
+      bx++
+    ) {
+      for (
+        let by = Math.floor(stone.minY / bucketSize);
+        by <= Math.floor(stone.maxY / bucketSize);
+        by++
+      ) {
         const key = bucketKey(bx, by);
         const list = buckets.get(key);
         if (list === undefined) {
@@ -152,7 +156,9 @@ function polygonStoneField(
     }
   }
   return (qx, qy) => {
-    const candidates = buckets.get(bucketKey(Math.floor(qx / bucketSize), Math.floor(qy / bucketSize)));
+    const candidates = buckets.get(
+      bucketKey(Math.floor(qx / bucketSize), Math.floor(qy / bucketSize)),
+    );
     if (candidates === undefined) {
       return null;
     }
@@ -275,8 +281,7 @@ function fanStoneField(
     const tiltY = 0.09 * (hash01(stoneA, stoneB + 9, phaseSeed) - 0.5);
     return {
       jointDistance,
-      top:
-        surface.reliefHeight * heightScale + tiltX * (qx - stoneX) + tiltY * (qy - stoneY),
+      top: surface.reliefHeight * heightScale + tiltX * (qx - stoneX) + tiltY * (qy - stoneY),
     };
   };
 }

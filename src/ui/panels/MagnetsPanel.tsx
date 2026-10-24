@@ -7,7 +7,7 @@ import { Section } from './Section.tsx';
 const DEFAULT_MAGNETS: MagnetParams = {
   shape: 'round',
   layout: 'even',
-  diameter: 6,
+  diameter: 6.1,
   length: 5,
   width: 5,
   depth: 2,

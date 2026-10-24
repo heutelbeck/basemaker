@@ -171,9 +171,10 @@ function freeAreaCenters(
   count: number,
   reach: number,
   obstacles: readonly Obstacle[],
+  slotFits: (x: number, y: number) => boolean,
 ): Vec[] | null {
   const clearance = (x: number, y: number): number => {
-    if (!footprint.contains(x, y, margin)) {
+    if (!footprint.contains(x, y, margin) || !slotFits(x, y)) {
       return -Infinity;
     }
     const edgeClearance = distanceToBoundary(footprint.outline, x, y) - margin;
@@ -302,12 +303,23 @@ function layoutCenters(
   }
   const margin = magnetHalfExtent(magnets) + magnets.padding + edgeInset + 0.3;
   if (obstacles.length > 0) {
+    const area = footprint();
+    const halfX = (magnets.shape === 'round' ? magnets.diameter : magnets.length) / 2;
+    const halfY = (magnets.shape === 'round' ? magnets.diameter : magnets.width) / 2;
+    const boxX = halfX + magnets.padding;
+    const boxY = halfY + magnets.padding;
+    // The same padded bounding box test the slot validation applies.
+    const slotFits = (x: number, y: number) =>
+      [-1, 1].every((sx) =>
+        [-1, 1].every((sy) => area.contains(x + sx * boxX, y + sy * boxY, edgeInset)),
+      );
     const free = freeAreaCenters(
-      footprint(),
+      area,
       margin,
       magnets.count,
       magnetReach(magnets),
       obstacles,
+      slotFits,
     );
     if (free !== null) {
       return free;

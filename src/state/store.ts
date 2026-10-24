@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Job, JobPart, JobStats } from '../generators/job.ts';
+import type { RackDownload } from '../export/paintRackZip.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
 import { defaultJob, validateJob } from '../generators/job.ts';
 import type { BaseParams } from '../params/types.ts';
@@ -14,11 +15,13 @@ export interface AppState {
   stats: JobStats | null;
   overhangOverlay: RawMesh | null;
   showOverhangs: boolean;
+  showMockParts: boolean;
   busy: boolean;
   buildError: string | null;
   setJob: (update: (job: Job) => Job) => void;
   replaceJob: (job: Job) => void;
   toggleOverhangs: () => void;
+  toggleMockParts: () => void;
 }
 
 let client: GeometryClient | null = null;
@@ -58,6 +61,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   stats: null,
   overhangOverlay: null,
   showOverhangs: false,
+  showMockParts: true,
   busy: false,
   buildError: null,
   setJob: (update) => {
@@ -68,6 +72,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   toggleOverhangs: () => {
     set({ showOverhangs: !get().showOverhangs });
+  },
+  toggleMockParts: () => {
+    set({ showMockParts: !get().showMockParts });
   },
 }));
 
@@ -121,6 +128,10 @@ export function exportStep(job: Job): Promise<ArrayBuffer> {
 
 export function exportThreeMfExploded(job: Job): Promise<Uint8Array> {
   return geometryClient().exportThreeMfExploded(job);
+}
+
+export function exportRackStls(job: Job): Promise<RackDownload> {
+  return geometryClient().exportRackStls(job);
 }
 
 /**

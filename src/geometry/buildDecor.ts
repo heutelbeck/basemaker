@@ -30,7 +30,13 @@ function checked(solid: Manifold): Manifold {
  * surface undulation, and a scatter of half-buried pebble bumps, like a
  * sculpted scenic base tab.
  */
-function basePad(wasm: ManifoldToplevel, track: Track, rng: Rng, radius: number, tolMm: number): Manifold {
+function basePad(
+  wasm: ManifoldToplevel,
+  track: Track,
+  rng: Rng,
+  radius: number,
+  tolMm: number,
+): Manifold {
   const noise = makeNoise2d(Math.floor(rng() * 1_000_000) + 3);
   const a1 = range(rng, 0.08, 0.16);
   const a2 = range(rng, 0.05, 0.1);
@@ -168,19 +174,32 @@ export function buildRock(wasm: ManifoldToplevel, params: RockParams): Manifold 
       const creviceDepth = meanR * 0.17 * (0.4 + 0.8 * params.irregularity);
       const fineCreviceDepth = meanR * 0.09 * (0.4 + 0.8 * params.irregularity);
 
-      const sphereNoise = (ux: number, uy: number, uz: number, frequency: number, octaves: number) =>
+      const sphereNoise = (
+        ux: number,
+        uy: number,
+        uz: number,
+        frequency: number,
+        octaves: number,
+      ) =>
         (noise.fbm((ux + 2.1) * frequency, (uy - 1.3) * frequency, octaves) +
           noise.fbm((uy + 4.7) * frequency, (uz + 0.9) * frequency, octaves) +
           noise.fbm((uz + 7.3) * frequency, (ux - 3.7) * frequency, octaves)) /
         3;
-      const sphereRidged = (ux: number, uy: number, uz: number, frequency: number, octaves: number) =>
+      const sphereRidged = (
+        ux: number,
+        uy: number,
+        uz: number,
+        frequency: number,
+        octaves: number,
+      ) =>
         (noise.ridged((ux + 5.2) * frequency, (uy + 1.9) * frequency, octaves) +
           noise.ridged((uy - 3.4) * frequency, (uz + 6.1) * frequency, octaves) +
           noise.ridged((uz + 0.7) * frequency, (ux + 8.9) * frequency, octaves)) /
         3;
 
       const radiusAt = (ux: number, uy: number, uz: number): number => {
-        const base = 1 / Math.sqrt((ux * ux) / (rx * rx) + (uy * uy) / (ry * ry) + (uz * uz) / (rz * rz));
+        const base =
+          1 / Math.sqrt((ux * ux) / (rx * rx) + (uy * uy) / (ry * ry) + (uz * uz) / (rz * rz));
         let displacement = 0;
         for (const lobe of lobes) {
           const dot = ux * lobe.dir[0] + uy * lobe.dir[1] + uz * lobe.dir[2];
@@ -191,8 +210,7 @@ export function buildRock(wasm: ManifoldToplevel, params: RockParams): Manifold 
         displacement -= creviceDepth * Math.pow(1 - Math.abs(2 * seam - 1), 2.5);
         const fineSeam = sphereNoise(ux, uy, uz, 3.1, 2);
         displacement -= fineCreviceDepth * Math.pow(1 - Math.abs(2 * fineSeam - 1), 3);
-        displacement +=
-          meanR * 0.3 * params.jaggedness * (sphereRidged(ux, uy, uz, 2.4, 3) - 0.5);
+        displacement += meanR * 0.3 * params.jaggedness * (sphereRidged(ux, uy, uz, 2.4, 3) - 0.5);
         displacement +=
           meanR *
           0.05 *
@@ -384,12 +402,7 @@ function growStem(
   return { points, radii };
 }
 
-function stemSolids(
-  wasm: ManifoldToplevel,
-  track: Track,
-  stem: Stem,
-  tolMm: number,
-): Manifold[] {
+function stemSolids(wasm: ManifoldToplevel, track: Track, stem: Stem, tolMm: number): Manifold[] {
   const solids: Manifold[] = [];
   const spheres = stem.points.map((point, i) => {
     const radius = Math.max(stem.radii[i], 0.1);

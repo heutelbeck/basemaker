@@ -124,9 +124,9 @@ export function TemplatePanel() {
         />
       </label>
       <p className="freeform-hint">
-        Classic table aid dimensions: blasts are 3, 5, or 10 inch circles with a center hole,
-        the flame template is an 8 by 3 inch teardrop. The colored frame exports as its own
-        part for multi-material printing.
+        Classic table aid dimensions: blasts are 3, 5, or 10 inch circles with a center hole, the
+        flame template is an 8 by 3 inch teardrop. The colored frame exports as its own part for
+        multi-material printing.
       </p>
     </Section>
   );

@@ -2,7 +2,11 @@ import type { Font } from 'opentype.js';
 import type { Drawing, Shape3D, Sketch } from 'replicad';
 import { draw, drawCircle, drawEllipse, drawRectangle, drawRoundedRectangle } from 'replicad';
 import { letteringBaselineRadius, sideWallGeometry } from '../features/lettering.ts';
-import { glyphVerticalCenter, layoutGlyphsOnArc, textArcContourGroups } from '../lettering/textOutlines.ts';
+import {
+  glyphVerticalCenter,
+  layoutGlyphsOnArc,
+  textArcContourGroups,
+} from '../lettering/textOutlines.ts';
 import { markerProfilePolygons } from '../../params/facingMarkers.ts';
 import { freeformOutline } from '../../params/freeform.ts';
 import { hexOutline, outlineFor } from '../../params/tessellation.ts';
@@ -29,7 +33,12 @@ const ERROR_UNEXPECTED_SHAPE = 'The B-rep boolean produced an unexpected non-sol
 export function buildStepShape(params: BaseParams, font: Font | null = null): Shape3D {
   const outerSpec = params.shape.kind === 'converter' ? params.shape.outer : params.shape;
   const bottom = bottomDrawing(params, outerSpec, 0);
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
+  const topInset = topInsetFor(
+    params.height,
+    params.edgeSlope,
+    params.lipRadius,
+    params.lipTopRadius,
+  );
   const top = topInset > 0 ? bottom.offset(-topInset) : bottom;
 
   let solid = profiledBodySolid(params, outerSpec, 0);
@@ -209,7 +218,12 @@ function profiledBodySolid(
   radialInset: number,
 ): Shape3D {
   const bottom = bottomDrawing(params, outerSpec, radialInset);
-  const topInset = topInsetFor(params.height, params.edgeSlope, params.lipRadius, params.lipTopRadius);
+  const topInset = topInsetFor(
+    params.height,
+    params.edgeSlope,
+    params.lipRadius,
+    params.lipTopRadius,
+  );
   if (params.lipRadius > params.height && outerSpec.kind === 'round') {
     // Truncated arc side: one circle spans the whole wall (plus the
     // optional top roll), so the body is a revolve of the exact profile

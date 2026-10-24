@@ -316,10 +316,9 @@ export function SidePlaquePanel() {
             />
           )}
           <p className="freeform-hint">
-            Up to two independently configured tablets on the side wall, each with its own
-            style, size, color, and text (name on the front, squad number on the back).
-            Plaque text replaces rim lettering; both cannot be combined. Text needs a round
-            base.
+            Up to two independently configured tablets on the side wall, each with its own style,
+            size, color, and text (name on the front, squad number on the back). Plaque text
+            replaces rim lettering; both cannot be combined. Text needs a round base.
           </p>
         </>
       )}

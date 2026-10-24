@@ -111,7 +111,9 @@ export function writeThreeMfParts(modelParts: ThreeMfPart[]): Uint8Array {
     }
   }
   for (const assembly of assemblies) {
-    parts.push(`  <object id="${assembly.id}" name="${assembly.name}" type="model">\n   <components>\n`);
+    parts.push(
+      `  <object id="${assembly.id}" name="${assembly.name}" type="model">\n   <components>\n`,
+    );
     for (const member of assembly.members) {
       parts.push(`    <component objectid="${member}"/>\n`);
     }
@@ -128,7 +130,9 @@ export function writeThreeMfParts(modelParts: ThreeMfPart[]): Uint8Array {
     '3D/3dmodel.model': strToU8(parts.join('')),
   };
   if (modelParts.length > 1) {
-    files['Metadata/model_settings.config'] = strToU8(modelSettings(modelParts, groups, modelParts.length + 2));
+    files['Metadata/model_settings.config'] = strToU8(
+      modelSettings(modelParts, groups, modelParts.length + 2),
+    );
   }
   return zipSync(files);
 }
@@ -150,10 +154,7 @@ function modelSettings(
       slots.set(part.colorHex, slots.size + 1);
     }
   }
-  const lines: string[] = [
-    '<?xml version="1.0" encoding="UTF-8"?>\n',
-    '<config>\n',
-  ];
+  const lines: string[] = ['<?xml version="1.0" encoding="UTF-8"?>\n', '<config>\n'];
   let nextId = firstAssemblyId;
   for (const [name, members] of groups) {
     const objectId = members.length === 1 ? members[0] : nextId;

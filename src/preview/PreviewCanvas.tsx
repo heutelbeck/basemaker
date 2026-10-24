@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type {
-  BufferGeometry} from 'three';
+import type { BufferGeometry } from 'three';
 import {
   AmbientLight,
   Box3,
@@ -37,6 +36,8 @@ interface PreviewScene {
 }
 
 const BODY_PREVIEW_COLOR = 0xc8ccd4;
+/** Mock parts such as preview bottles stay see-through so the model shows. */
+const MOCK_OPACITY = 0.55;
 
 function createPreviewScene(container: HTMLDivElement): PreviewScene {
   const renderer = new WebGLRenderer({ antialias: true });
@@ -137,11 +138,15 @@ export function PreviewCanvas({ parts, overhangOverlay, showOverhangs }: Preview
     disposeParts(preview.partGroup);
     parts.forEach((part, index) => {
       const isBody = part.name === 'body' || part.name === 'model';
+      const mock = part.previewOnly === true;
       const material = new MeshStandardMaterial({
         color: isBody ? BODY_PREVIEW_COLOR : new Color(part.colorHex),
-        flatShading: true,
+        flatShading: !mock,
         metalness: 0.05,
         roughness: isBody ? 0.65 : 0.5,
+        transparent: mock,
+        opacity: mock ? MOCK_OPACITY : 1,
+        depthWrite: !mock,
         polygonOffset: index > 0,
         polygonOffsetFactor: 0,
         polygonOffsetUnits: -4 * index,

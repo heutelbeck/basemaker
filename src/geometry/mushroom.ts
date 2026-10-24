@@ -79,7 +79,10 @@ export function mushroomSolid(
   const stemProfile = (z: number, theta: number): number => {
     const bulb = bulbR + (stemR - bulbR) * Math.min(z / bulbH, 1);
     const shaft = z <= bulbH ? bulb : stemR * (1 - 0.06 * ((z - bulbH) / (stemH - bulbH)));
-    const striation = 1 + 0.035 * Math.sin(9 * theta + striationPhase) + 0.03 * (noise.fbm(theta * 1.2, z * 0.7, 2) - 0.5);
+    const striation =
+      1 +
+      0.035 * Math.sin(9 * theta + striationPhase) +
+      0.03 * (noise.fbm(theta * 1.2, z * 0.7, 2) - 0.5);
     return shaft * striation;
   };
   const capDome = (t: number): number => {
@@ -154,7 +157,9 @@ export function mushroomSolid(
         const rHere = marginR(theta) * Math.pow(Math.cos((t * Math.PI) / 2), 0.85);
         const umbo = umboH * Math.exp(-(rHere * rHere) / (umboR * umboR));
         const lumps =
-          0.11 * capR * (noise.fbm(rHere * Math.cos(theta) * 0.22 + 11, rHere * Math.sin(theta) * 0.22, 2) - 0.5);
+          0.11 *
+          capR *
+          (noise.fbm(rHere * Math.cos(theta) * 0.22 + 11, rHere * Math.sin(theta) * 0.22, 2) - 0.5);
         let wartBumps = 0;
         for (const wart of warts) {
           const dSq =
@@ -206,11 +211,11 @@ export function mushroomSolid(
   }
   const base = ringStart[0];
   for (let j = 0; j < U; j++) {
-    triangles.push(bottomCenter, base + (j + 1) % U, base + j);
+    triangles.push(bottomCenter, base + ((j + 1) % U), base + j);
   }
   const last = ringStart[rings.length - 1];
   for (let j = 0; j < U; j++) {
-    triangles.push(apex, last + j, last + (j + 1) % U);
+    triangles.push(apex, last + j, last + ((j + 1) % U));
   }
 
   const mesh = new wasm.Mesh({

@@ -246,3 +246,69 @@ describe('magnet layouts', () => {
     }
   });
 });
+
+describe('magnet holders beside a diagonal slotta slot', () => {
+  const holder = (count: number): BaseParams['magnets'] => ({
+    shape: 'round',
+    layout: 'even',
+    diameter: 6.1,
+    length: 5,
+    width: 5,
+    depth: 2,
+    count,
+    spacing: 12,
+    offsetX: 0,
+    offsetY: 0,
+    padding: 0.8,
+  });
+  const slotted = (shape: BaseParams['shape'], slotLength: number, count: number) =>
+    params({
+      shape,
+      height: 3.4,
+      edgeSlope: 1.3,
+      hollow: { wall: 1.1, topThickness: 1, supports: null },
+      slotta: { length: slotLength, width: 2, angleDeg: 45, offsetX: 0.71, offsetY: -0.71 },
+      magnets: holder(count),
+    });
+
+  it.each([
+    ['25 mm TOW square', { kind: 'square', size: 25 }, 26, 1],
+    ['50 mm square with two magnets', { kind: 'square', size: 50 }, 26, 2],
+    ['32 mm round', { kind: 'round', diameter: 32 }, 26, 1],
+    ['25 mm round', { kind: 'round', diameter: 25 }, 21, 1],
+    ['40 mm round with two magnets', { kind: 'round', diameter: 40 }, 26, 2],
+    ['30x60 mm cavalry rect', { kind: 'rect', length: 60, width: 30 }, 26, 1],
+    ['60x35 mm oval', { kind: 'oval', length: 60, width: 35 }, 26, 1],
+    ['40 mm hex', { kind: 'hex', size: 40 }, 26, 1],
+  ] as [string, BaseParams['shape'], number, number][])(
+    'moves the holders of a %s into the free area beside the slot',
+    (_name, shape, slotLength, count) => {
+      expect(validate(slotted(shape, slotLength, count))).toEqual([]);
+    },
+  );
+
+  it('centers a single holder in the open half of a 25 mm square', async () => {
+    const { magnetCenters } = await import('../src/params/magnetLayout.ts');
+    const [[x, y]] = magnetCenters(slotted({ kind: 'square', size: 25 }, 26, 1));
+    expect(x).toBeCloseTo(-y, 2);
+    expect(x).toBeLessThan(-4);
+  });
+
+  it('reports holders that cannot fit beside the slot instead of hiding the conflict', () => {
+    const crowded = slotted({ kind: 'round', diameter: 25 }, 21, 2);
+    expect(validate(crowded).map((issue) => issue.code)).toContain('slotta-magnet-overlap');
+  });
+
+  it('keeps the holder clear of a mounting hole as well as the slot', () => {
+    const withHole: BaseParams = {
+      ...slotted({ kind: 'round', diameter: 40 }, 26, 1),
+      slotta: { length: 26, width: 2, angleDeg: 0, offsetX: 0, offsetY: -6 },
+      mountingHoles: {
+        holes: [
+          { shape: 'round' as const, sizeMm: 5, rimMm: 1, rotationDeg: 0, offsetX: 0, offsetY: 6 },
+        ],
+      },
+    };
+    expect(validate(withHole)).toEqual([]);
+  });
+});

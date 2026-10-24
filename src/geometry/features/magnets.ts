@@ -71,4 +71,3 @@ export function magnetHousings(
   });
   return track(wasm.Manifold.union(pillars));
 }
-

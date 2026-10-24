@@ -79,11 +79,7 @@ export function hollowInnerOutline(
 ): Point2[] {
   const ceilingHeight = profile.height - hollow.topThickness;
   const insetAtCeiling = profileInsetAt(profile, ceilingHeight);
-  return insetOutline(
-    wasm,
-    outlines.bottom,
-    insetAtCeiling + hollow.wall + clearance,
-  );
+  return insetOutline(wasm, outlines.bottom, insetAtCeiling + hollow.wall + clearance);
 }
 
 export function buildHollowCavity(

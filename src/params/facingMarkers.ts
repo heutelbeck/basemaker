@@ -7,12 +7,7 @@
  * indentation, never raised, so the outer footprint stays exact for
  * edge-to-edge measuring.
  */
-export type FacingMarkerStyle =
-  | 'line'
-  | 'triangleUp'
-  | 'triangleDown'
-  | 'topNotch'
-  | 'bottomNotch';
+export type FacingMarkerStyle = 'line' | 'triangleUp' | 'triangleDown' | 'topNotch' | 'bottomNotch';
 
 export interface FacingMarkerSpec {
   angleDeg: number;
@@ -61,9 +56,24 @@ export function frontArcMarkers(): FacingMarkerParams {
   return {
     depth: DEFAULT_FACING_MARKER_DEPTH,
     markers: [
-      { angleDeg: 0, style: 'topNotch', widthMm: DEFAULT_FACING_MARKER_WIDTH, lineWidthMm: DEFAULT_FACING_MARKER_LINE_WIDTH },
-      { angleDeg: 180, style: 'topNotch', widthMm: DEFAULT_FACING_MARKER_WIDTH, lineWidthMm: DEFAULT_FACING_MARKER_LINE_WIDTH },
-      { angleDeg: 90, style: 'triangleUp', widthMm: DEFAULT_FACING_MARKER_WIDTH, lineWidthMm: DEFAULT_FACING_MARKER_LINE_WIDTH },
+      {
+        angleDeg: 0,
+        style: 'topNotch',
+        widthMm: DEFAULT_FACING_MARKER_WIDTH,
+        lineWidthMm: DEFAULT_FACING_MARKER_LINE_WIDTH,
+      },
+      {
+        angleDeg: 180,
+        style: 'topNotch',
+        widthMm: DEFAULT_FACING_MARKER_WIDTH,
+        lineWidthMm: DEFAULT_FACING_MARKER_LINE_WIDTH,
+      },
+      {
+        angleDeg: 90,
+        style: 'triangleUp',
+        widthMm: DEFAULT_FACING_MARKER_WIDTH,
+        lineWidthMm: DEFAULT_FACING_MARKER_LINE_WIDTH,
+      },
     ],
   };
 }

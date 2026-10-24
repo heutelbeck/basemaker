@@ -497,6 +497,14 @@ input[type='range'] {
   accent-color: var(--error);
 }
 
+.mock-toggle {
+  bottom: 48px;
+}
+
+.mock-toggle input {
+  accent-color: var(--accent);
+}
+
 .overhang-toggle em {
   font-style: normal;
   color: var(--error);

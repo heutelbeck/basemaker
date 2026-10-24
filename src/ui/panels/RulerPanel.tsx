@@ -150,13 +150,13 @@ export function RulerPanel() {
         />
       </label>
       <p className="freeform-hint">
-        Sticks carry a colored frame, dividers, and numbers as a flush top inlay; set a split
-        length to break long sticks into dovetailed pieces for gluing (25.4 mm units equal one
-        inch), loaded as separately arrangeable objects. Chain links print separately and are
-        assembled: each numbered pill measures exactly one unit, and its integrated tail (or
-        separate straps with two pivots) slides under the next pill. Pin joints are press-fit
-        snap rivets - push the chamfered cap through the hole until it seats flush - and the
-        magnet option puts vertical pockets at the same pivots instead.
+        Sticks carry a colored frame, dividers, and numbers as a flush top inlay; set a split length
+        to break long sticks into dovetailed pieces for gluing (25.4 mm units equal one inch),
+        loaded as separately arrangeable objects. Chain links print separately and are assembled:
+        each numbered pill measures exactly one unit, and its integrated tail (or separate straps
+        with two pivots) slides under the next pill. Pin joints are press-fit snap rivets - push the
+        chamfered cap through the hole until it seats flush - and the magnet option puts vertical
+        pockets at the same pivots instead.
       </p>
     </Section>
   );

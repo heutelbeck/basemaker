@@ -95,11 +95,7 @@ export function pointInShape(shape: ResolvedShape, x: number, y: number, inset =
     case 'hex': {
       const a = shape.acrossFlats / 2 - inset;
       const c = Math.sqrt(3) / 2;
-      return (
-        Math.abs(y) <= a &&
-        Math.abs(x * c + y / 2) <= a &&
-        Math.abs(x * c - y / 2) <= a
-      );
+      return Math.abs(y) <= a && Math.abs(x * c + y / 2) <= a && Math.abs(x * c - y / 2) <= a;
     }
   }
 }

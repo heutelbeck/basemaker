@@ -15,7 +15,12 @@ import { letteringCutter, letteringSolids } from './features/lettering.ts';
 import { magnetHousings, magnetSlotCutters } from './features/magnets.ts';
 import { mountingHoleCutters, mountingHoleHousings } from './features/mountingHoles.ts';
 import { recessCutter } from './features/recess.ts';
-import { buildHollowCavity, buildShellSolid, hollowInnerOutline, shellOutlines } from './features/shell.ts';
+import {
+  buildHollowCavity,
+  buildShellSolid,
+  hollowInnerOutline,
+  shellOutlines,
+} from './features/shell.ts';
 import { slottaCutter, slottaHousing } from './features/slotta.ts';
 import { plaqueSolid } from './features/plaque.ts';
 import { surfaceRelief } from './features/surface/index.ts';
@@ -44,7 +49,13 @@ export function buildBase(
       outerSpec.kind === 'freeform'
         ? (freeformOutline(outerSpec, tol) as Point2[])
         : outlineFor(resolveShape(outerSpec), tol);
-    const profile = computeEdgeProfile(params.height, params.edgeSlope, params.lipRadius, tol, params.lipTopRadius);
+    const profile = computeEdgeProfile(
+      params.height,
+      params.edgeSlope,
+      params.lipRadius,
+      tol,
+      params.lipTopRadius,
+    );
     const outlines = shellOutlines(wasm, bottomOutline, profile);
 
     const outer = buildShellSolid(wasm, track, outlines, profile);
@@ -54,7 +65,14 @@ export function buildBase(
       const cavity = buildHollowCavity(wasm, track, outlines, profile, params.hollow);
       solid = track(solid.subtract(cavity));
       if (params.magnets !== null) {
-        const pillars = magnetHousings(wasm, track, params.magnets, magnetLayoutCenters, params.height, tol);
+        const pillars = magnetHousings(
+          wasm,
+          track,
+          params.magnets,
+          magnetLayoutCenters,
+          params.height,
+          tol,
+        );
         const clipped = track(pillars.intersect(outer));
         solid = track(solid.add(clipped));
       }
@@ -198,9 +216,7 @@ export function buildPlaqueParts(wasm: ManifoldToplevel, params: BaseParams): Pl
     const needsReference = variants.some(
       (variant) => variant.lettering !== null && variant.lettering.style !== 'recessed',
     );
-    const reference = needsReference
-      ? track(buildBase(wasm, letterReferenceParams(params)))
-      : null;
+    const reference = needsReference ? track(buildBase(wasm, letterReferenceParams(params))) : null;
     return variants.map((variant, index) => {
       const raw = plaqueSolid(wasm, track, variant, outline);
       let solid = raw;
@@ -250,7 +266,7 @@ export function baseBottomOutline(params: BaseParams): Point2[] {
   const outerSpec = params.shape.kind === 'converter' ? params.shape.outer : params.shape;
   const tol = params.quality.chordTolMm;
   return outerSpec.kind === 'freeform'
-    ? (freeformOutline(outerSpec, tol))
+    ? freeformOutline(outerSpec, tol)
     : outlineFor(resolveShape(outerSpec), tol);
 }
 

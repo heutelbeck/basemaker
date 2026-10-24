@@ -320,7 +320,7 @@ describe('tray magnets', () => {
     expect(defaultTrayMagnets(20)).toMatchObject({
       shape: 'round',
       layout: 'even',
-      diameter: 6,
+      diameter: 6.1,
       depth: 2,
       count: 4,
     });
@@ -333,7 +333,7 @@ describe('tray magnets', () => {
     const base = { rows: 4, cols: 5, floor: 3, edgeSlope: 0 };
     const plain = buildMovementTray(wasm, movementTray(base));
     const withMagnets = buildMovementTray(wasm, movementTray({ ...base, magnets }));
-    const slotVolume = 4 * Math.PI * 3 * 3 * 2;
+    const slotVolume = 4 * Math.PI * 3.05 * 3.05 * 2;
     expect(withMagnets.status()).toBe('NoError');
     expect(withMagnets.genus()).toBe(0);
     expect((plain.volume() - withMagnets.volume()) / slotVolume).toBeCloseTo(1, 1);

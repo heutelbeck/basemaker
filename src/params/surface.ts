@@ -95,15 +95,39 @@ export function defaultSurfaceParams(type: SurfaceParams['type']): SurfaceParams
         seed: 1,
       };
     case 'planks':
-      return { type, plankWidth: 4.5, gap: 0.3, reliefHeight: 0.5, angleDeg: 0, grain: true, seed: 1 };
+      return {
+        type,
+        plankWidth: 4.5,
+        gap: 0.3,
+        reliefHeight: 0.5,
+        angleDeg: 0,
+        grain: true,
+        seed: 1,
+      };
     case 'pond':
-      return { type, count: 1, depth: 1, sizeFraction: 0.5, roughness: 0.35, shoreGradient: true, seed: 1 };
+      return {
+        type,
+        count: 1,
+        depth: 1,
+        sizeFraction: 0.5,
+        roughness: 0.35,
+        shoreGradient: true,
+        seed: 1,
+      };
     case 'craters':
       return { type, count: 3, diameterMm: 10, depth: 1.2, rimHeight: 0.5, seed: 1 };
     case 'lava':
       return { type, cellSize: 7, crackWidth: 0.6, depth: 0.7, seed: 1 };
     case 'steelPlates':
-      return { type, plateSize: 14, gap: 0.4, reliefHeight: 0.4, detail: 'rivets', detailHeight: 0.2, seed: 1 };
+      return {
+        type,
+        plateSize: 14,
+        gap: 0.4,
+        reliefHeight: 0.4,
+        detail: 'rivets',
+        detailHeight: 0.2,
+        seed: 1,
+      };
   }
 }
 
@@ -136,7 +160,11 @@ export function validateSurface(
       if (!reliefOk(surface.reliefHeight)) {
         issues.push({ code: 'surface-relief', message: ERROR_SURFACE_RELIEF_INVALID });
       }
-      if (!(surface.plankWidth > 0) || surface.gap < 0.15 || surface.gap >= surface.plankWidth / 3) {
+      if (
+        !(surface.plankWidth > 0) ||
+        surface.gap < 0.15 ||
+        surface.gap >= surface.plankWidth / 3
+      ) {
         issues.push({ code: 'surface-sizes', message: ERROR_SURFACE_SIZES_INVALID });
       }
       break;
@@ -182,7 +210,11 @@ export function validateSurface(
       }
       break;
     case 'steelPlates':
-      if (!reliefOk(surface.reliefHeight) || surface.detailHeight < 0.1 || surface.detailHeight > 1.5) {
+      if (
+        !reliefOk(surface.reliefHeight) ||
+        surface.detailHeight < 0.1 ||
+        surface.detailHeight > 1.5
+      ) {
         issues.push({ code: 'surface-relief', message: ERROR_SURFACE_RELIEF_INVALID });
       }
       if (!(surface.plateSize > 4) || surface.gap < 0.15 || surface.gap >= surface.plateSize / 4) {

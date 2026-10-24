@@ -59,8 +59,7 @@ export function buildLava(
       const current = warp.displace(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t);
       const midX = (previous[0] + current[0]) / 2;
       const midY = (previous[1] + current[1]) / 2;
-      const breathing =
-        0.55 + 0.9 * detail.fbm(midX / (pitch * 0.6), midY / (pitch * 0.6), 2);
+      const breathing = 0.55 + 0.9 * detail.fbm(midX / (pitch * 0.6), midY / (pitch * 0.6), 2);
       segments.push({
         ax: previous[0],
         ay: previous[1],
@@ -117,7 +116,10 @@ export function buildLava(
           const t =
             lengthSq === 0
               ? 0
-              : Math.min(Math.max(((x - segment.ax) * dx + (y - segment.ay) * dy) / lengthSq, 0), 1);
+              : Math.min(
+                  Math.max(((x - segment.ax) * dx + (y - segment.ay) * dy) / lengthSq, 0),
+                  1,
+                );
           const distance =
             Math.hypot(x - (segment.ax + t * dx), y - (segment.ay + t * dy)) - segment.half;
           best = Math.min(best, distance);
@@ -136,7 +138,9 @@ export function buildLava(
     }
     const ropes =
       0.3 * plateHeight * detail.ridged(x / (pitch * 0.45), y / (pitch * 0.45), 3) +
-      0.16 * plateHeight * Math.sin(8 * detail.fbm(x / (pitch * 1.3), y / (pitch * 1.3), 2) * Math.PI);
+      0.16 *
+        plateHeight *
+        Math.sin(8 * detail.fbm(x / (pitch * 1.3), y / (pitch * 1.3), 2) * Math.PI);
     const t = Math.min(clearance / shoulder, 1);
     const lip = Math.sqrt(t * (2 - t));
     return EMBED + Math.max(0.05, plateHeight * 0.85 + ropes) * lip;
@@ -147,9 +151,7 @@ export function buildLava(
   const block = heightfieldBlock(wasm, track, half, heightAt, gridCells);
   const placed = track(block.translate(0, 0, height - EMBED));
   const clipRegion = faceClip(wasm, track, face);
-  const clipPrismProto = track(
-    wasm.Manifold.extrude(clipRegion, plateHeight * 2 + EMBED + 1),
-  );
+  const clipPrismProto = track(wasm.Manifold.extrude(clipRegion, plateHeight * 2 + EMBED + 1));
   const clipPrism = track(clipPrismProto.translate(0, 0, height - EMBED));
   return { add: track(placed.intersect(clipPrism)), cut: null };
 }

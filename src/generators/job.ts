@@ -1,12 +1,21 @@
 import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import type { Shape3D } from 'replicad';
-import { buildBase, buildBaseSingleSolid, buildLetterSolids, buildPlaqueParts } from '../geometry/buildBase.ts';
+import {
+  buildBase,
+  buildBaseSingleSolid,
+  buildLetterSolids,
+  buildPlaqueParts,
+} from '../geometry/buildBase.ts';
 import { ensureFont } from '../geometry/lettering/font.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
 import { analyzeOverhangs } from '../geometry/overhang.ts';
 import { toRawMesh } from '../geometry/mesh.ts';
 import { buildCrystals, buildPlants, buildRock } from '../geometry/buildDecor.ts';
-import { buildAdapterTray, buildMovementTray, buildMovementTrayParts } from '../geometry/buildTray.ts';
+import {
+  buildAdapterTray,
+  buildMovementTray,
+  buildMovementTrayParts,
+} from '../geometry/buildTray.ts';
 import type { CrystalParams, PlantParams, RockParams } from '../params/decor.ts';
 import {
   defaultCrystalParams,
@@ -23,6 +32,8 @@ import {
   validateAdapterTray,
   validateMovementTray,
 } from '../params/trays.ts';
+import type { PaintRackParams } from '../params/paintRack.ts';
+import { defaultPaintRackParams, solvePaintRack, validatePaintRack } from '../params/paintRack.ts';
 import type { TemplateParams } from '../params/template.ts';
 import { defaultTemplateParams, validateTemplate } from '../params/template.ts';
 import type { RulerParams } from '../params/ruler.ts';
@@ -46,7 +57,8 @@ export type Job =
   | { generator: 'crystal'; params: CrystalParams }
   | { generator: 'plants'; params: PlantParams }
   | { generator: 'ruler'; params: RulerParams }
-  | { generator: 'template'; params: TemplateParams };
+  | { generator: 'template'; params: TemplateParams }
+  | { generator: 'paintRack'; params: PaintRackParams };
 
 export type GeneratorId = Job['generator'];
 
@@ -59,8 +71,10 @@ export const GENERATOR_LABELS: Record<GeneratorId, string> = {
   plants: 'Plants',
   ruler: 'Measuring ruler',
   template: 'Area template',
+  paintRack: 'Paint rack',
 };
 
+const ERROR_STEP_PAINT_RACK = 'STEP export of paint racks is not yet implemented.';
 const ERROR_STEP_MESH_ONLY =
   'This generator produces organic mesh geometry and has no STEP form; export STL or 3MF instead.';
 
@@ -86,6 +100,8 @@ export function defaultJobFor(generator: GeneratorId): Job {
       return { generator, params: defaultRulerParams() };
     case 'template':
       return { generator, params: defaultTemplateParams() };
+    case 'paintRack':
+      return { generator, params: defaultPaintRackParams() };
   }
 }
 
@@ -107,6 +123,8 @@ export function validateJob(job: Job): ValidationIssue[] {
       return validateRuler(job.params);
     case 'template':
       return validateTemplate(job.params);
+    case 'paintRack':
+      return validatePaintRack(job.params);
   }
 }
 
@@ -174,6 +192,10 @@ export async function buildJobMesh(wasm: ManifoldToplevel, job: Job): Promise<Ma
       }
       return merged;
     }
+    case 'paintRack': {
+      const { buildPaintRack } = await import('../geometry/buildPaintRack.ts');
+      return buildPaintRack(wasm, job.params);
+    }
   }
 }
 
@@ -182,6 +204,8 @@ export interface JobPart {
   colorHex: string;
   mesh: RawMesh;
   group?: string;
+  /** Visual aid shown in the preview only, never exported or measured. */
+  previewOnly?: boolean;
 }
 
 export interface JobStats {
@@ -201,6 +225,10 @@ export interface JobBundle {
 }
 
 const BODY_COLOR = '#1A1A1A';
+const BOTTLE_PREVIEW_COLOR = '#B8462E';
+/** Alternating tones so neighboring racks of a drawer read apart. */
+const RACK_COLORS = ['#9AA0A8', '#6F767F'];
+const CAP_PREVIEW_COLOR = '#F2F2EE';
 
 function mergeOverlays(overlays: RawMesh[]): RawMesh | null {
   if (overlays.length === 0) {
@@ -232,7 +260,13 @@ function mergeOverlays(overlays: RawMesh[]): RawMesh | null {
  * letter solids so slicers and the preview can color them separately.
  */
 export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<JobBundle> {
-  const solids: { name: string; colorHex: string; solid: Manifold; group?: string }[] = [];
+  const solids: {
+    name: string;
+    colorHex: string;
+    solid: Manifold;
+    group?: string;
+    previewOnly?: boolean;
+  }[] = [];
   try {
     const basePlaques = job.generator === 'base' ? configuredPlaques(job.params) : [];
     if (job.generator === 'base' && (job.params.lettering !== null || basePlaques.length > 0)) {
@@ -257,7 +291,11 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
           }
         });
       } else {
-        solids.push({ name: 'body', colorHex: BODY_COLOR, solid: buildBase(wasm, job.params, font) });
+        solids.push({
+          name: 'body',
+          colorHex: BODY_COLOR,
+          solid: buildBase(wasm, job.params, font),
+        });
       }
       if (lettering !== null && font !== null && lettering.style !== 'recessed') {
         solids.push({
@@ -292,6 +330,32 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
       if (accent !== null) {
         solids.push({ name: 'accent', colorHex: job.params.accent.colorHex, solid: accent });
       }
+    } else if (job.generator === 'paintRack') {
+      const { buildPaintRackBottles, buildPaintRacks } =
+        await import('../geometry/buildPaintRack.ts');
+      buildPaintRacks(wasm, job.params).forEach(({ rack, solid }, index) => {
+        solids.push({
+          name: `rack ${rack.label} ${rack.unitsX}x${rack.unitsY}`,
+          colorHex: RACK_COLORS[index % RACK_COLORS.length],
+          solid,
+          group: rack.label,
+        });
+      });
+      const bottles = buildPaintRackBottles(wasm, job.params);
+      if (bottles !== null) {
+        solids.push({
+          name: 'mock bottles',
+          colorHex: BOTTLE_PREVIEW_COLOR,
+          solid: bottles.bodies,
+          previewOnly: true,
+        });
+        solids.push({
+          name: 'mock caps',
+          colorHex: CAP_PREVIEW_COLOR,
+          solid: bottles.necks,
+          previewOnly: true,
+        });
+      }
     } else {
       solids.push({
         name: 'model',
@@ -308,6 +372,15 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
     let overhangArea = 0;
     const overlays: RawMesh[] = [];
     for (const entry of solids) {
+      if (entry.previewOnly === true) {
+        parts.push({
+          name: entry.name,
+          colorHex: entry.colorHex,
+          mesh: toRawMesh(entry.solid),
+          previewOnly: true,
+        });
+        continue;
+      }
       volume += entry.solid.volume();
       const box = entry.solid.boundingBox();
       for (let axis = 0; axis < 3; axis++) {
@@ -376,6 +449,10 @@ export async function buildJobStep(job: Job): Promise<Shape3D> {
     case 'ruler':
     case 'template':
       throw new Error(ERROR_STEP_MESH_ONLY);
+    // TODO: implement STEP export for paint racks.
+    // Needs the hull-swept pockets rebuilt as B-rep lofts in replicad.
+    case 'paintRack':
+      throw new Error(ERROR_STEP_PAINT_RACK);
   }
 }
 
@@ -405,5 +482,10 @@ export function jobFilename(job: Job, extension: string): string {
       return job.params.variant === 'round'
         ? `template-blast-${job.params.diameterMm}.${extension}`
         : `template-flame-${job.params.lengthMm}x${job.params.widthMm}.${extension}`;
+    case 'paintRack': {
+      const { unitsX, unitsY, orientation } = job.params;
+      const count = solvePaintRack(job.params)?.bottles.length ?? 0;
+      return `paint-rack-${unitsX}x${unitsY}-${orientation}-${count}.${extension}`;
+    }
   }
 }

@@ -33,10 +33,7 @@ export function makeWarpField(seed: number, amplitude: number, featureScale: num
     displace(x: number, y: number): [number, number] {
       const u = x / featureScale;
       const v = y / featureScale;
-      return [
-        x + amplitude * (2 * nx.fbm(u, v, 3) - 1),
-        y + amplitude * (2 * ny.fbm(u, v, 3) - 1),
-      ];
+      return [x + amplitude * (2 * nx.fbm(u, v, 3) - 1), y + amplitude * (2 * ny.fbm(u, v, 3) - 1)];
     },
   };
 }
@@ -59,9 +56,7 @@ export function makeNoise2d(seed: number): Noise2d {
     const v10 = at(ix + 1, iy);
     const v01 = at(ix, iy + 1);
     const v11 = at(ix + 1, iy + 1);
-    return (
-      v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) + v01 * (1 - fx) * fy + v11 * fx * fy
-    );
+    return v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) + v01 * (1 - fx) * fy + v11 * fx * fy;
   };
 
   const fbm = (x: number, y: number, octaves: number): number => {

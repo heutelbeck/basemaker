@@ -47,8 +47,8 @@ export function BodyPanel() {
       {params.lipRadius > params.height && (
         <p className="freeform-hint">
           A lip radius larger than the height turns the whole side into one truncated arc
-          (Warmachine style); the top roll blends that arc into the top face with a smaller
-          tangent arc instead of a hard corner.
+          (Warmachine style); the top roll blends that arc into the top face with a smaller tangent
+          arc instead of a hard corner.
         </p>
       )}
       <Section
@@ -102,7 +102,9 @@ export function BodyPanel() {
                       ? null
                       : {
                           ...current.hollow,
-                          supports: enabled ? { style: 'pillars' as const, spacing: 15, diameter: 3 } : null,
+                          supports: enabled
+                            ? { style: 'pillars' as const, spacing: 15, diameter: 3 }
+                            : null,
                         },
                 }))
               }

@@ -73,8 +73,8 @@ export function RockPanel() {
         Reroll rock (seed {params.seed})
       </button>
       <p className="freeform-hint">
-        The flat spot on top is guaranteed level for mounting a miniature;
-        the bottom is always flat for gluing to a base.
+        The flat spot on top is guaranteed level for mounting a miniature; the bottom is always flat
+        for gluing to a base.
       </p>
     </Section>
   );
@@ -240,10 +240,9 @@ export function PlantsPanel() {
         Reroll tuft (seed {params.seed})
       </button>
       <p className="freeform-hint">
-        Grown inside the printable overhang cone with no mid-air islands, so
-        tufts print support-free at miniature scale. Mushrooms never intersect;
-        ones that cannot fit are skipped, so enlarge the pad radius and spread
-        for a bigger colony.
+        Grown inside the printable overhang cone with no mid-air islands, so tufts print
+        support-free at miniature scale. Mushrooms never intersect; ones that cannot fit are
+        skipped, so enlarge the pad radius and spread for a bigger colony.
       </p>
     </Section>
   );

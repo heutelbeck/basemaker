@@ -84,8 +84,7 @@ describe('plant generator', () => {
     const tuft = buildPlants(wasm, params);
     const box = tuft.boundingBox();
     const maxLeanRad = (40 * Math.PI) / 180;
-    const maxReach =
-      params.spreadMm + 1.5 + params.heightMm * Math.sin(maxLeanRad) + 1;
+    const maxReach = params.spreadMm + 1.5 + params.heightMm * Math.sin(maxLeanRad) + 1;
     expect(Math.max(Math.abs(box.min[0]), box.max[0])).toBeLessThanOrEqual(maxReach);
     expect(Math.max(Math.abs(box.min[1]), box.max[1])).toBeLessThanOrEqual(maxReach);
     tuft.delete();
