@@ -53,6 +53,9 @@ const GRID_STEP_MM = 100;
 const FRAME_DIRECTION = new Vector3(1, -1, 0.9).normalize();
 /** The same view for a model whose front faces +Y. */
 const FRAME_DIRECTION_PLUS_Y = new Vector3(-1, 1, 0.9).normalize();
+/** The near plane sits this share of the viewing distance in front of the camera. */
+const NEAR_SHARE = 0.05;
+const NEAR_MIN_MM = 0.05;
 /** Room left around a framed model. */
 const FRAME_MARGIN = 1.1;
 /** Mock parts such as preview bottles stay see-through so the model shows. */
@@ -131,6 +134,24 @@ function fitGrid(preview: PreviewScene, box: Box3): void {
   preview.scene.add(preview.grid);
 }
 
+/**
+ * Keeps the near and far planes close round the scene for the current zoom.
+ * Depth precision follows their ratio, and a fixed tiny near plane lets
+ * surfaces a millimetre apart, such as a bottle in its bore, flicker
+ * through each other from a distance.
+ */
+function fitDepthRange(preview: PreviewScene): void {
+  const { camera, controls } = preview;
+  const distance = camera.position.distanceTo(controls.target);
+  const near = Math.max(NEAR_MIN_MM, distance * NEAR_SHARE);
+  const far = distance + preview.gridSize * 1.5;
+  if (Math.abs(camera.near - near) > near * 0.05 || Math.abs(camera.far - far) > far * 0.05) {
+    camera.near = near;
+    camera.far = far;
+    camera.updateProjectionMatrix();
+  }
+}
+
 /** Points the camera at the model from far enough that all of it is on screen. */
 function frameModel(preview: PreviewScene, box: Box3): void {
   const { camera, controls } = preview;
@@ -142,8 +163,6 @@ function frameModel(preview: PreviewScene, box: Box3): void {
   camera.position
     .copy(controls.target)
     .addScaledVector(preview.frontAtPlusY ? FRAME_DIRECTION_PLUS_Y : FRAME_DIRECTION, distance);
-  camera.far = Math.max(2000, distance * 4);
-  camera.updateProjectionMatrix();
 }
 
 function disposeParts(group: Group): void {
@@ -191,6 +210,7 @@ export function PreviewCanvas({
     let animationFrame = 0;
     const renderLoop = () => {
       preview.controls.update();
+      fitDepthRange(preview);
       preview.renderer.render(preview.scene, preview.camera);
       animationFrame = requestAnimationFrame(renderLoop);
     };
@@ -214,9 +234,18 @@ export function PreviewCanvas({
       return;
     }
     disposeParts(preview.partGroup);
-    parts.forEach((part, index) => {
+    // Parts of one group stack on each other, such as lettering on a body,
+    // and each layer is drawn a little nearer so coplanar faces do not
+    // flicker. Separate groups, such as the racks of a drawer, sit side by
+    // side and keep their true depth.
+    const layers = new Map<string | undefined, number>();
+    for (const part of parts) {
       const isBody = part.name === 'body' || part.name === 'model';
       const mock = part.previewOnly === true;
+      const layer = mock ? 0 : (layers.get(part.group) ?? 0);
+      if (!mock) {
+        layers.set(part.group, layer + 1);
+      }
       const material = new MeshStandardMaterial({
         color: isBody ? BODY_PREVIEW_COLOR : new Color(part.colorHex),
         flatShading: !mock,
@@ -224,14 +253,12 @@ export function PreviewCanvas({
         roughness: isBody ? 0.65 : 0.5,
         transparent: mock,
         opacity: mock ? MOCK_OPACITY : 1,
-        // Mock parts never share faces with the model: they take no offset
-        // and keep depth, so nearer bottles hide those behind them.
-        polygonOffset: !mock && index > 0,
+        polygonOffset: layer > 0,
         polygonOffsetFactor: 0,
-        polygonOffsetUnits: -4 * index,
+        polygonOffsetUnits: -4 * layer,
       });
       preview.partGroup.add(new Mesh(toBufferGeometry(part.mesh), material));
-    });
+    }
     if (parts.length > 0) {
       const box = new Box3().setFromObject(preview.partGroup);
       fitGrid(preview, box);
