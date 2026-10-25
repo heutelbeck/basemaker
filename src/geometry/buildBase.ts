@@ -1,7 +1,7 @@
 import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import type { Font } from 'opentype.js';
 import { computeEdgeProfile } from '../params/edgeProfile.ts';
-import { magnetCenters } from '../params/magnetLayout.ts';
+import { baseMagnetSlot, magnetCenters, magnetGlueSlots } from '../params/magnetLayout.ts';
 import { freeformOutline } from '../params/freeform.ts';
 import { resolveShape } from '../params/shapeMetrics.ts';
 import { supportPillarCenters } from '../params/supports.ts';
@@ -12,7 +12,7 @@ import { withGeometryScope } from './dispose.ts';
 import { converterInsertCutter } from './features/converter.ts';
 import { facingMarkerCutter } from './features/facingMarkers.ts';
 import { letteringCutter, letteringSolids } from './features/lettering.ts';
-import { magnetHousings, magnetSlotCutters } from './features/magnets.ts';
+import { magnetGlueSlotCutters, magnetHousings, magnetSlotCutters } from './features/magnets.ts';
 import { mountingHoleCutters, mountingHoleHousings } from './features/mountingHoles.ts';
 import { recessCutter } from './features/recess.ts';
 import {
@@ -142,8 +142,13 @@ export function buildBase(
         cutters.push(relief.cut);
       }
     }
-    if (params.magnets !== null) {
-      cutters.push(...magnetSlotCutters(wasm, track, params.magnets, magnetLayoutCenters, tol));
+    const magnetSlot = baseMagnetSlot(params);
+    if (magnetSlot !== null) {
+      cutters.push(...magnetSlotCutters(wasm, track, magnetSlot, magnetLayoutCenters, tol));
+      if (params.hollow !== null && params.magnetGlueSlots) {
+        const slots = magnetGlueSlots(magnetSlot, magnetLayoutCenters);
+        cutters.push(...magnetGlueSlotCutters(wasm, track, magnetSlot, slots));
+      }
     }
     if (params.recess !== null) {
       cutters.push(recessCutter(wasm, track, outlines.top, params.recess, params.height));

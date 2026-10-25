@@ -77,6 +77,46 @@ describe('validate', () => {
       'magnet-depth',
     ],
     [
+      'glue height pushing the magnet slot through the base',
+      {
+        magnets: {
+          shape: 'round',
+          layout: 'line',
+          diameter: 5,
+          length: 5,
+          width: 5,
+          depth: 2.5,
+          count: 1,
+          spacing: 0,
+          offsetX: 0,
+          offsetY: 0,
+          padding: 0.5,
+        },
+        magnetGlueHeightMm: 0.5,
+      },
+      'magnet-depth',
+    ],
+    [
+      'negative glue height',
+      {
+        magnets: {
+          shape: 'round',
+          layout: 'line',
+          diameter: 5,
+          length: 5,
+          width: 5,
+          depth: 2.5,
+          count: 1,
+          spacing: 0,
+          offsetX: 0,
+          offsetY: 0,
+          padding: 0.5,
+        },
+        magnetGlueHeightMm: -0.1,
+      },
+      'magnet-glue-height',
+    ],
+    [
       'magnets overlapping each other',
       {
         magnets: {

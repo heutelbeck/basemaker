@@ -18,7 +18,12 @@ import { supportPillarCenters } from '../../params/supports.ts';
 import type { MountingHoleSpec } from '../../params/mountingHoles.ts';
 import type { BaseParams, MagnetParams } from '../../params/types.ts';
 import { SLOTTA_RIM } from '../../params/types.ts';
-import { magnetCenters } from '../../params/magnetLayout.ts';
+import {
+  GLUE_SLOT_WIDTH_MM,
+  baseMagnetSlot,
+  magnetCenters,
+  magnetGlueSlots,
+} from '../../params/magnetLayout.ts';
 import { plaqueProud } from '../features/plaque.ts';
 import { CUT_EPSILON } from '../features/shell.ts';
 
@@ -132,12 +137,25 @@ export function buildStepShape(params: BaseParams, font: Font | null = null): Sh
     }
   }
 
-  if (params.magnets !== null) {
-    for (const slot of magnetDrawings(params, params.magnets, 0)) {
+  const magnetSlot = baseMagnetSlot(params);
+  if (magnetSlot !== null) {
+    for (const slot of magnetDrawings(params, magnetSlot, 0)) {
       const cutter = asShape3D(
-        slot.sketchOnPlane('XY', -CUT_EPSILON).extrude(params.magnets.depth + CUT_EPSILON),
+        slot.sketchOnPlane('XY', -CUT_EPSILON).extrude(magnetSlot.depth + CUT_EPSILON),
       );
       solid = asShape3D(solid.cut(cutter));
+    }
+    if (params.hollow !== null && params.magnetGlueSlots) {
+      for (const slot of magnetGlueSlots(magnetSlot, magnetCenters(params))) {
+        const cutter = asShape3D(
+          drawRectangle(slot.length + 2 * CUT_EPSILON, GLUE_SLOT_WIDTH_MM)
+            .rotate(slot.angleDeg)
+            .translate(slot.x, slot.y)
+            .sketchOnPlane('XY', -CUT_EPSILON)
+            .extrude(magnetSlot.depth + CUT_EPSILON),
+        );
+        solid = asShape3D(solid.cut(cutter));
+      }
     }
   }
 

@@ -90,6 +90,8 @@ function migrate(entry: StoredEntry): SavedBase {
   if (migrated.job.generator === 'base') {
     migrated.job.params.lipRadius ??= 0;
     migrated.job.params.lipTopRadius ??= 0;
+    migrated.job.params.magnetGlueSlots ??= true;
+    migrated.job.params.magnetGlueHeightMm ??= 0.2;
     if (migrated.job.params.magnets !== null) {
       migrated.job.params.magnets.layout ??= 'line';
     }

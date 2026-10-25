@@ -1,5 +1,7 @@
 import type { Manifold, ManifoldToplevel } from 'manifold-3d';
 import type { Vec } from '../../params/polygon.ts';
+import type { GlueSlot } from '../../params/magnetLayout.ts';
+import { GLUE_SLOT_WIDTH_MM } from '../../params/magnetLayout.ts';
 import type { MagnetParams } from '../../params/types.ts';
 import type { Track } from '../dispose.ts';
 import { segmentsFor } from '../../params/tessellation.ts';
@@ -34,6 +36,27 @@ export function magnetSlotCutters(
     const zShift =
       magnets.shape === 'round' ? -CUT_EPSILON : (magnets.depth + CUT_EPSILON) / 2 - CUT_EPSILON;
     return track(slot.translate(x, y, zShift));
+  });
+}
+
+/**
+ * Glue slot cutters, one bar per magnet as high as the slot, cutting the
+ * housing wall open on both ends from the underside.
+ */
+export function magnetGlueSlotCutters(
+  wasm: ManifoldToplevel,
+  track: Track,
+  magnets: MagnetParams,
+  slots: GlueSlot[],
+): Manifold[] {
+  const height = magnets.depth + CUT_EPSILON;
+  return slots.map((slot) => {
+    const bar = track(
+      wasm.Manifold.cube([slot.length + 2 * CUT_EPSILON, GLUE_SLOT_WIDTH_MM, height], true),
+    );
+    return track(
+      track(bar.rotate([0, 0, slot.angleDeg])).translate(slot.x, slot.y, height / 2 - CUT_EPSILON),
+    );
   });
 }
 

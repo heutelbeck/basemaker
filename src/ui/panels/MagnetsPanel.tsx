@@ -2,6 +2,7 @@ import type { MagnetParams } from '../../params/types.ts';
 import { setBaseParams, useBaseParams } from '../../state/store.ts';
 import { NumberField } from '../controls/NumberField.tsx';
 import { Select } from '../controls/Select.tsx';
+import { Toggle } from '../controls/Toggle.tsx';
 import { Section } from './Section.tsx';
 
 const DEFAULT_MAGNETS: MagnetParams = {
@@ -19,7 +20,8 @@ const DEFAULT_MAGNETS: MagnetParams = {
 };
 
 export function MagnetsPanel() {
-  const magnets = useBaseParams().magnets;
+  const params = useBaseParams();
+  const magnets = params.magnets;
 
   const update = (change: Partial<MagnetParams>) => {
     setBaseParams((current) => ({
@@ -38,6 +40,28 @@ export function MagnetsPanel() {
     >
       {magnets !== null && (
         <MagnetFields magnets={magnets} onChange={update} footprintName="base" />
+      )}
+      {magnets !== null && (
+        <NumberField
+          label="Added glue height above the magnet"
+          unit="mm"
+          value={params.magnetGlueHeightMm}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(magnetGlueHeightMm) =>
+            setBaseParams((current) => ({ ...current, magnetGlueHeightMm }))
+          }
+        />
+      )}
+      {magnets !== null && params.hollow !== null && (
+        <Toggle
+          label="Glue slots in the housings, so squeezed out glue escapes into the cavity"
+          checked={params.magnetGlueSlots}
+          onChange={(magnetGlueSlots) =>
+            setBaseParams((current) => ({ ...current, magnetGlueSlots }))
+          }
+        />
       )}
     </Section>
   );

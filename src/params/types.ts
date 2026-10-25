@@ -165,6 +165,17 @@ export interface BaseParams {
   lipTopRadius: number;
   hollow: HollowParams | null;
   magnets: MagnetParams | null;
+  /**
+   * Slots the magnet housings of hollow bases from below on two opposite
+   * sides, as high as the magnet, so the glue squeezed out while pressing
+   * a magnet in escapes into the cavity instead of the underside.
+   */
+  magnetGlueSlots: boolean;
+  /**
+   * Extra slot depth above the magnet for the glue layer, so a glued
+   * magnet ends flush with the underside instead of standing proud.
+   */
+  magnetGlueHeightMm: number;
   recess: RecessParams | null;
   slotta: SlottaParams | null;
   mountingHoles: MountingHoleParams | null;
@@ -261,6 +272,8 @@ export function defaultParams(): BaseParams {
     lipTopRadius: 0,
     hollow: null,
     magnets: null,
+    magnetGlueSlots: true,
+    magnetGlueHeightMm: 0.2,
     recess: null,
     slotta: null,
     mountingHoles: null,

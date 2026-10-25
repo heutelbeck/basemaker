@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildBase } from '../src/geometry/buildBase.ts';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
 import { signedArea } from '../src/geometry/outlines.ts';
+import { magnetGlueSlots } from '../src/params/magnetLayout.ts';
 import { circleOutline, segmentsFor } from '../src/params/tessellation.ts';
 import type { BaseParams, MagnetParams } from '../src/params/types.ts';
 import { defaultParams } from '../src/params/types.ts';
@@ -27,6 +28,8 @@ function roundMagnets(overrides: Partial<MagnetParams>): MagnetParams {
   };
 }
 
+const glueHeight = defaultParams().magnetGlueHeightMm;
+
 function ngonArea(r: number, n: number): number {
   return 0.5 * n * r * r * Math.sin((2 * Math.PI) / n);
 }
@@ -46,8 +49,16 @@ describe('magnet slots', () => {
     const single = await volumeOf({ edgeSlope: 0, magnets: roundMagnets({}) });
     const magnets = roundMagnets({});
     const n = segmentsFor(magnets.diameter / 2, 0.02);
-    const slotVolume = ngonArea(magnets.diameter / 2, n) * magnets.depth;
+    const slotVolume = ngonArea(magnets.diameter / 2, n) * (magnets.depth + glueHeight);
     expect(base - single).toBeCloseTo(slotVolume, 2);
+  });
+
+  it('deepens the slot by the glue height so a glued magnet ends flush with the underside', async () => {
+    const magnets = roundMagnets({});
+    const pressFit = await volumeOf({ edgeSlope: 0, magnets, magnetGlueHeightMm: 0 });
+    const glued = await volumeOf({ edgeSlope: 0, magnets, magnetGlueHeightMm: 0.3 });
+    const n = segmentsFor(magnets.diameter / 2, 0.02);
+    expect(pressFit - glued).toBeCloseTo(ngonArea(magnets.diameter / 2, n) * 0.3, 2);
   });
 
   it('removes one slot per magnet for a row of magnets', async () => {
@@ -66,7 +77,7 @@ describe('magnet slots', () => {
       edgeSlope: 0,
       magnets: roundMagnets({ shape: 'rect', length: 6, width: 4, depth: 1.5 }),
     });
-    expect(base - rect).toBeCloseTo(6 * 4 * 1.5, 2);
+    expect(base - rect).toBeCloseTo(6 * 4 * (1.5 + glueHeight), 2);
   });
 
   it('keeps a hollow base printable: housings give each magnet slot walls', async () => {
@@ -77,6 +88,7 @@ describe('magnet slots', () => {
         edgeSlope: 0,
         hollow: { wall: 2, topThickness: 1, supports: null },
         magnets: roundMagnets({}),
+        magnetGlueSlots: false,
       }),
     );
     expect(solid.status()).toBe('NoError');
@@ -90,9 +102,57 @@ describe('magnet slots', () => {
     const slotN = segmentsFor(magnets.diameter / 2, 0.02);
     const cavityHeight = 4 - 1;
     const addedPillar = ngonArea(housingRadius, housingN) * cavityHeight;
-    const removedSlot = ngonArea(magnets.diameter / 2, slotN) * magnets.depth;
+    const removedSlot = ngonArea(magnets.diameter / 2, slotN) * (magnets.depth + glueHeight);
     expect(solid.volume()).toBeCloseTo(hollowNoMagnets + addedPillar - removedSlot, 1);
     solid.delete();
+  });
+});
+
+describe('magnet glue slots', () => {
+  const hollow = { wall: 2, topThickness: 1, supports: null };
+  const magnets = roundMagnets({ offsetX: 4 });
+  const housingWallX = magnets.offsetX;
+  const housingWallY = magnets.diameter / 2 + magnets.padding / 2;
+
+  async function housingWallFilled(overrides: Partial<BaseParams>, z: number): Promise<boolean> {
+    const wasm = await getManifold();
+    const solid = buildBase(wasm, params({ edgeSlope: 0, magnets, ...overrides }));
+    expect(solid.status()).toBe('NoError');
+    const probe = wasm.Manifold.cube([0.2, 0.2, 0.2], true).translate(
+      housingWallX,
+      housingWallY,
+      z,
+    );
+    const inside = solid.intersect(probe);
+    const filled = inside.volume() > 0.004;
+    for (const resource of [solid, probe, inside]) {
+      resource.delete();
+    }
+    return filled;
+  }
+
+  it('opens the housing wall of a hollow base beside the magnet so squeezed out glue escapes into the cavity', async () => {
+    expect(await housingWallFilled({ hollow }, magnets.depth / 2)).toBe(false);
+  });
+
+  it('keeps the housing wall closed above the magnet so the slots do not reach the top', async () => {
+    expect(await housingWallFilled({ hollow }, magnets.depth + glueHeight + 0.3)).toBe(true);
+  });
+
+  it('keeps the housing wall closed when the glue slots are switched off', async () => {
+    expect(await housingWallFilled({ hollow, magnetGlueSlots: false }, magnets.depth / 2)).toBe(
+      true,
+    );
+  });
+
+  it('leaves solid bases untouched since they have no housing to vent into', async () => {
+    const withSlots = await volumeOf({ edgeSlope: 0, magnets });
+    const withoutSlots = await volumeOf({ edgeSlope: 0, magnets, magnetGlueSlots: false });
+    expect(withSlots).toBeCloseTo(withoutSlots, 6);
+  });
+
+  it('turns the slots of an off-center magnet across the line to the base center, away from the rim', () => {
+    expect(magnetGlueSlots(magnets, [[magnets.offsetX, 0]])[0].angleDeg).toBeCloseTo(90, 6);
   });
 });
 

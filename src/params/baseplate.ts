@@ -127,7 +127,7 @@ export function defaultBaseplateParams(): BaseplateParams {
     solidFiller: true,
     nodeArmMm: 8,
     connectorHoles: true,
-    connectorHoleMm: 1.9,
+    connectorHoleMm: 1.85,
     connectorHolesOnEdges: false,
     starHoles: true,
     cornerRadiusMm: BASEPLATE_STAR_MM,

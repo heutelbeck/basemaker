@@ -70,11 +70,13 @@ const ERROR_LETTERING_VALUES_INVALID =
   'The lettering size must be positive and the margin at least a quarter of the size.';
 const ERROR_MAGNET_COUNT_INVALID = 'The magnet count must be a whole number of at least 1.';
 const ERROR_MAGNET_DIMENSIONS_POSITIVE = 'The magnet dimensions and depth must be positive.';
+const ERROR_MAGNET_GLUE_HEIGHT_INVALID = 'The added glue height must be between 0 and 1 mm.';
 const ERROR_MAGNET_OUTSIDE_FOOTPRINT =
   'A magnet slot including its padding does not fit inside the base footprint.';
 const ERROR_MAGNET_SPACING_TOO_SMALL =
   'The magnet spacing must be at least the magnet footprint size.';
-const ERROR_MAGNET_TOO_DEEP = 'The magnet depth plus padding must be smaller than the base height.';
+const ERROR_MAGNET_TOO_DEEP =
+  'The magnet depth plus glue height and padding must be smaller than the base height.';
 const ERROR_MOUNTING_HOLE_FIT =
   'A mounting hole including its rim does not fit inside the top face of the base.';
 const ERROR_MOUNTING_HOLE_OVERLAP =
@@ -329,7 +331,10 @@ export function validate(params: BaseParams): ValidationIssue[] {
     );
     issues.push(...slotIssues);
     const dimensionsValid = !slotIssues.some((issue) => issue.code === 'magnet-dimensions');
-    if (dimensionsValid && magnets.depth + magnets.padding >= params.height) {
+    const glueHeight = params.magnetGlueHeightMm;
+    if (!(glueHeight >= 0 && glueHeight <= 1)) {
+      issues.push({ code: 'magnet-glue-height', message: ERROR_MAGNET_GLUE_HEIGHT_INVALID });
+    } else if (dimensionsValid && magnets.depth + glueHeight + magnets.padding >= params.height) {
       issues.push({ code: 'magnet-depth', message: ERROR_MAGNET_TOO_DEEP });
     }
   }

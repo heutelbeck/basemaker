@@ -267,6 +267,52 @@ export function magnetCenters(params: BaseParams): Vec[] {
 }
 
 /**
+ * Magnet slot of a base: the magnet grown in depth by the glue height,
+ * or null when the base has no magnets.
+ */
+export function baseMagnetSlot(params: BaseParams): MagnetParams | null {
+  return params.magnets === null
+    ? null
+    : { ...params.magnets, depth: params.magnets.depth + params.magnetGlueHeightMm };
+}
+
+/** Width of each glue slot through a magnet housing wall. */
+export const GLUE_SLOT_WIDTH_MM = 1;
+
+/**
+ * One glue slot bar per magnet: centered on the magnet, `length` long
+ * across the whole housing so it opens the wall on both ends, turned by
+ * `angleDeg` about Z.
+ */
+export interface GlueSlot {
+  x: number;
+  y: number;
+  length: number;
+  angleDeg: number;
+}
+
+/**
+ * Glue slots through the housing wall of each magnet. Round housings are
+ * slotted at right angles to the line from the base center, so neither
+ * slot points at the rim; rectangular housings through their short sides.
+ */
+export function magnetGlueSlots(magnets: MagnetParams, centers: Vec[]): GlueSlot[] {
+  return centers.map(([x, y]) => {
+    if (magnets.shape === 'rect') {
+      const alongX = magnets.length >= magnets.width;
+      return {
+        x,
+        y,
+        length: (alongX ? magnets.length : magnets.width) + 2 * magnets.padding,
+        angleDeg: alongX ? 0 : 90,
+      };
+    }
+    const angleDeg = Math.hypot(x, y) < 1e-6 ? 0 : (Math.atan2(y, x) * 180) / Math.PI + 90;
+    return { x, y, length: magnets.diameter + 2 * magnets.padding, angleDeg };
+  });
+}
+
+/**
  * Magnet slot centers inside an arbitrary polygon footprint, keeping
  * `edgeInset` mm of extra margin to the outline.
  */
