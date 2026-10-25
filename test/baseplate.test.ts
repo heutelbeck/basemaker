@@ -91,6 +91,20 @@ describe('baseplate drawer planning', () => {
     expect(sum(leftWall)[1]).toBeCloseTo(rest, 6);
   });
 
+  it('lays the drawer out as on the build plate: front wall at -Y, part A1 front left', () => {
+    const pieces = planBaseplate(baseplate({ alignY: 'start' })) ?? [];
+    const a1 = pieces.find((piece) => piece.label === 'A1');
+    const frontEdge = Math.min(...pieces.map((piece) => piece.centerY - piece.depth / 2));
+    const leftEdge = Math.min(...pieces.map((piece) => piece.centerX - piece.width / 2));
+    expect(a1?.centerY).toBe(Math.min(...pieces.map((piece) => piece.centerY)));
+    expect(a1?.centerX).toBe(Math.min(...pieces.map((piece) => piece.centerX)));
+    // Against the front wall: no filler at -Y, all of it at the back.
+    expect(pieces.every((piece) => piece.padFront === 0)).toBe(true);
+    expect(Math.max(...pieces.map((piece) => piece.padBack))).toBeGreaterThan(0);
+    expect(frontEdge).toBeCloseTo(-(6 * GRID_PITCH_MM + 8 - 1) / 2, 6);
+    expect(leftEdge).toBeLessThan(0);
+  });
+
   it('leaves a rest too narrow to print open instead of adding a sliver of filler', () => {
     const pieces = planBaseplate(baseplate({ drawerWidthMm: 4 * GRID_PITCH_MM + 1.6 })) ?? [];
     expect(pieces.every((piece) => piece.padLeft === 0 && piece.padRight === 0)).toBe(true);
@@ -148,7 +162,7 @@ describe('baseplate geometry', () => {
     await withParts(params, (wasm, parts) => {
       const [a1, b1] = [parts[0], parts[2]];
       const seamX = a1.piece.centerX + a1.piece.width / 2;
-      const y = a1.piece.centerY + a1.piece.depth / 2 - a1.piece.padFront - GRID_PITCH_MM;
+      const y = a1.piece.centerY + a1.piece.depth / 2 - a1.piece.padBack - GRID_PITCH_MM;
       const z = connectorHoleZ(params);
       for (const offset of [-7, -5, 5, 7]) {
         const part = offset < 0 ? a1.solid : b1.solid;
@@ -166,7 +180,7 @@ describe('baseplate geometry', () => {
     await withParts(params, (wasm, parts) => {
       const a1 = parts[0];
       const seamX = a1.piece.centerX + a1.piece.width / 2;
-      const y = a1.piece.centerY + a1.piece.depth / 2 - a1.piece.padFront - GRID_PITCH_MM;
+      const y = a1.piece.centerY + a1.piece.depth / 2 - a1.piece.padBack - GRID_PITCH_MM;
       expect(materialAt(wasm, a1.solid, seamX - 6, y, connectorHoleZ(params))).toBe(true);
     });
   });
@@ -295,12 +309,49 @@ describe('baseplate rounded drawer corners', () => {
     });
     await withParts(params, (wasm, [{ piece, solid }]) => {
       const left = piece.centerX - piece.width / 2;
-      const back = piece.centerY - piece.depth / 2;
+      const front = piece.centerY - piece.depth / 2;
       // The square corner is gone, the arc carries a bar.
-      expect(materialAt(wasm, solid, left + 0.5, back + 0.5, 0.5)).toBe(false);
+      expect(materialAt(wasm, solid, left + 0.5, front + 0.5, 0.5)).toBe(false);
       const along = 8 - 8 / Math.SQRT2 + 0.5;
-      expect(materialAt(wasm, solid, left + along, back + along, 0.5)).toBe(true);
+      expect(materialAt(wasm, solid, left + along, front + along, 0.5)).toBe(true);
     });
+  });
+});
+
+describe('baseplate edges next to filler and connectors for later', () => {
+  // One part, 5.5 mm filler left and right, against the front wall, 2 mm filler at the back.
+  const edgeDrawer = (overrides: Partial<BaseplateParams> = {}) =>
+    baseplate({ drawerWidthMm: 96, drawerDepthMm: 87, alignY: 'start', ...overrides });
+
+  it('leaves no star notch at a crossing on a grid edge that borders filler', async () => {
+    await withParts(edgeDrawer(), (wasm, [{ piece, solid }]) => {
+      const gridRight = piece.centerX + piece.width / 2 - piece.padRight;
+      const gridBack = piece.centerY + piece.depth / 2 - piece.padBack;
+      expect(materialAt(wasm, solid, gridRight - 0.5, gridBack - 0.5, 0.5)).toBe(true);
+      // Against the bare front wall the half star stays open.
+      const gridFront = piece.centerY - piece.depth / 2;
+      expect(materialAt(wasm, solid, piece.centerX + 0.5, gridFront + 0.5, 0.5)).toBe(false);
+    });
+  });
+
+  it('fills a rounded corner up to the cell opening instead of leaving it open', async () => {
+    await withParts(edgeDrawer({ solidFiller: false }), (wasm, [{ piece, solid }]) => {
+      const right = piece.centerX + piece.width / 2;
+      const back = piece.centerY + piece.depth / 2;
+      expect(materialAt(wasm, solid, right - 3, back - 3, 0.5)).toBe(true);
+    });
+  });
+
+  it('drills connector holes into the outer edges only when asked', async () => {
+    const probe = async (connectorHolesOnEdges: boolean) => {
+      const params = edgeDrawer({ connectorHolesOnEdges });
+      return withParts(params, (wasm, [{ piece, solid }]) => {
+        const gridFront = piece.centerY - piece.depth / 2;
+        return materialAt(wasm, solid, piece.centerX, gridFront + 5, connectorHoleZ(params));
+      });
+    };
+    expect(await probe(false)).toBe(true);
+    expect(await probe(true)).toBe(false);
   });
 });
 
@@ -309,5 +360,6 @@ describe('baseplate defaults', () => {
     const params = defaultBaseplateParams();
     expect(params.cornerRadiusMm).toBe(BASEPLATE_STAR_MM);
     expect(params.solidFiller).toBe(true);
+    expect(params.connectorHolesOnEdges).toBe(false);
   });
 });

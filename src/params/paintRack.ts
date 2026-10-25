@@ -34,7 +34,7 @@ export type PaintRackFill = 'ribs' | 'cradles' | 'filled' | 'block';
  * racks that fit the build plate; every rack is a window onto the pattern,
  * so racks of any split fit together and bottles may cross rack seams.
  * Bottles stand upright or lie tilted with their caps rising towards the
- * front (+Y). Tilted bottles sink into the Gridfinity foot cells and pass
+ * back of the drawer (+Y), labels and bottoms to the front. Tilted bottles sink into the Gridfinity foot cells and pass
  * the baseplate ridges with no material in between.
  */
 export interface PaintRackParams {
@@ -52,12 +52,12 @@ export interface PaintRackParams {
   fill: PaintRackFill;
   /** Length along a tilted bottle, from its bottom, that the supports carry. */
   supportLengthMm: number;
-  /** Free room in front of the drawer grid that tilted caps may reach into. */
+  /** Free room behind the drawer grid (+Y) that tilted caps may reach into. */
   frontRoomMm: number;
   /**
    * Lays tilted bottles in one row per grid unit, so identical modules
-   * continue the pattern behind each other: caps reach over the module in
-   * front, and the caps of the frontmost row reach freely past the grid.
+   * continue the pattern behind each other: caps reach over the module
+   * behind, and the caps of the rearmost row reach freely past the grid.
    */
   tileModules: boolean;
   plateWidthMm: number;
@@ -113,7 +113,7 @@ const ERROR_PAINT_RACK_NO_FIT =
 const ERROR_PAINT_RACK_TOO_LOW =
   'The bottles do not fit below the maximum height at any tilt; raise the maximum height.';
 const ERROR_PAINT_RACK_VALUES =
-  'Paint racks need a drawer of 1 to 24 grid units per side, a build plate that holds at least one grid unit, non-negative room in front of the grid, a bottle whose neck and top are no wider than the body and whose body is shorter than the bottle, a clearance of 0 to 3 mm, a wall of 0.4 to 5 mm, a bottle gap from minus the clearance up to 5 mm, a floor of 0.8 to 5 mm, a tilt of 5 to 89.5 degrees, a non-negative baseplate height, an upright pocket depth of 3 to 60 mm, and a support length of 10 mm up to the bottle length.';
+  'Paint racks need a drawer of 1 to 24 grid units per side, a build plate that holds at least one grid unit, non-negative room behind the grid, a bottle whose neck and top are no wider than the body and whose body is shorter than the bottle, a clearance of 0 to 3 mm, a wall of 0.4 to 5 mm, a bottle gap from minus the clearance up to 5 mm, a floor of 0.8 to 5 mm, a tilt of 5 to 89.5 degrees, a non-negative baseplate height, an upright pocket depth of 3 to 60 mm, and a support length of 10 mm up to the bottle length.';
 
 export function defaultPaintRackParams(): PaintRackParams {
   return {
@@ -316,7 +316,7 @@ export interface PaintRackLayout {
   binTop: number;
   /** Highest bottle point above the drawer floor, including the baseplate. */
   totalHeight: number;
-  /** How far the bottles reach past the front edge of the drawer grid. */
+  /** How far the bottles reach past the +Y (back) edge of the drawer grid. */
   frontOverhang: number;
 }
 
@@ -617,7 +617,7 @@ function supportFront(params: PaintRackParams, tiltDeg: number): number {
 /**
  * Last allowed axis start and the number of rows. Upright bottles must lie
  * inside the drawer grid. Tilted bottles need their supports inside it,
- * and their caps may reach into the free room in front of the grid.
+ * and their caps may reach into the free room behind the grid.
  */
 function rowFit(
   params: PaintRackParams,

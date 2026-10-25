@@ -42,7 +42,7 @@ export function PaintRackPanel() {
             {tilted && `, tilted ${layout.tiltDeg.toFixed(1)} deg`}, highest bottle point{' '}
             {layout.totalHeight.toFixed(1)} mm above the drawer floor.
             {layout.frontOverhang > 0 &&
-              ` Caps reach ${layout.frontOverhang.toFixed(1)} mm past the front of the grid.`}
+              ` Caps reach ${layout.frontOverhang.toFixed(1)} mm past the back of the grid.`}
           </p>
         )}
         {layout !== null && (
@@ -177,7 +177,7 @@ export function PaintRackPanel() {
         )}
         {tilted && !params.tileModules && (
           <NumberField
-            label="Free room in front of the grid for caps"
+            label="Free room behind the grid for caps"
             unit="mm"
             value={params.frontRoomMm}
             min={0}
@@ -235,9 +235,9 @@ export function PaintRackPanel() {
           />
         </div>
         <p className="freeform-hint">
-          The front is +Y: caps rise towards it. On Gridfinity feet the bottles sink into the foot
-          cells and pass the baseplate ridges with no material in between; the baseplate height
-          counts towards the maximum height.
+          Caps rise towards the back of the drawer, labels face the front. On Gridfinity feet the
+          bottles sink into the foot cells and pass the baseplate ridges with no material in
+          between; the baseplate height counts towards the maximum height.
         </p>
       </Section>
       <Section title="Bottle">

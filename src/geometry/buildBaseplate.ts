@@ -136,7 +136,7 @@ function starHoles(ctx: Context, layout: BaseplateLayout): Manifold {
   const square = track(wasm.CrossSection.square([2 * size, 2 * size], true));
   const star = track(square.subtract(track(wasm.CrossSection.union(arcs))));
   const stars = track(
-    wasm.CrossSection.union(layout.crossings.map(([x, y]) => track(star.translate([x, y])))),
+    wasm.CrossSection.union(layout.starCrossings.map(([x, y]) => track(star.translate([x, y])))),
   );
   const height = BASEPLATE_PROFILE_HEIGHT_MM + 2 * BASEPLATE_CUT_MM;
   const prisms = track(
@@ -147,7 +147,8 @@ function starHoles(ctx: Context, layout: BaseplateLayout): Manifold {
 
 /**
  * Rounded drawer corners: what lies outside the corner arc is cut away,
- * and a bar runs round the arc so the wall bars stay joined.
+ * and the corner inside the arc is filled at bar height up to the opening
+ * of the nearest cell, so the wall bars stay joined with no gap.
  */
 function roundCorners(ctx: Context, layout: BaseplateLayout, material: Manifold): Manifold {
   const { wasm, track, params } = ctx;
@@ -155,8 +156,9 @@ function roundCorners(ctx: Context, layout: BaseplateLayout, material: Manifold)
   if (radius <= 0 || layout.corners.length === 0) {
     return material;
   }
+  const opening = cellOpening(ctx);
   let result = material;
-  for (const { x, y, dx, dy } of layout.corners) {
+  for (const { x, y, dx, dy, cell } of layout.corners) {
     const cx = x + dx * radius;
     const cy = y + dy * radius;
     const box = track(
@@ -172,10 +174,9 @@ function roundCorners(ctx: Context, layout: BaseplateLayout, material: Manifold)
         wasm.Manifold.extrude(outside, BASEPLATE_PROFILE_HEIGHT_MM + 2 * BASEPLATE_CUT_MM),
       ).translate(0, 0, -BASEPLATE_CUT_MM),
     );
-    const inner = circle(ctx, Math.max(radius - params.barWidthMm, 0.01), cx, cy);
-    const arc = track(track(disk.subtract(inner)).intersect(box));
-    const arcBar = track(wasm.Manifold.extrude(arc, params.barHeightMm));
-    result = track(track(result.subtract(cutter)).add(arcBar));
+    const inside = track(wasm.Manifold.extrude(track(disk.intersect(box)), params.barHeightMm));
+    const fill = track(inside.subtract(track(opening.translate(cell[0], cell[1], 0))));
+    result = track(track(result.subtract(cutter)).add(fill));
   }
   return result;
 }
@@ -199,7 +200,7 @@ export function buildBaseplatePiece(
       ...(params.connectorHoles
         ? layout.connectorHoles.map((hole) => connectorHole(ctx, hole))
         : []),
-      ...(params.starHoles ? [starHoles(ctx, layout)] : []),
+      ...(params.starHoles && layout.starCrossings.length > 0 ? [starHoles(ctx, layout)] : []),
     ];
     const drilled =
       holes.length === 0 ? material : track(material.subtract(track(wasm.Manifold.union(holes))));

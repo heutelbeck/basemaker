@@ -13,19 +13,19 @@ export type BaseplateAlign = 'center' | 'start' | 'end';
  * as the drawer takes, and flat bars reach on to the drawer walls over the
  * rest. The drawer is split into parts that fit the build plate; filament
  * pieces pushed through holes across the seams join neighboring parts.
- * Y runs from the back (-Y) to the front (+Y); seen from the front, -X is
- * the right wall.
+ * Seen from the front of the drawer, X runs from the left wall (-X) to the
+ * right and Y from the front (-Y) to the back, as on the build plate.
  */
 export interface BaseplateParams {
   /** Inside width of the drawer, left to right. */
   drawerWidthMm: number;
-  /** Inside depth of the drawer, back to front. */
+  /** Inside depth of the drawer, front to back. */
   drawerDepthMm: number;
   /** Total play between the baseplate and the drawer walls on each axis. */
   clearanceMm: number;
-  /** Grid position across the drawer: start is the right wall, seen from the front. */
+  /** Grid position across the drawer: start is the left wall. */
   alignX: BaseplateAlign;
-  /** Grid position along the drawer depth: start is the back wall. */
+  /** Grid position along the drawer depth: start is the front wall. */
   alignY: BaseplateAlign;
   plateWidthMm: number;
   plateDepthMm: number;
@@ -39,6 +39,11 @@ export interface BaseplateParams {
   /** Diameter of the holes for the filament pieces that join the parts. */
   connectorHoleMm: number;
   /**
+   * Connector holes on the outer edges of the parts too, not only across
+   * the seams, so parts printed ahead can be joined in any layout later.
+   */
+  connectorHolesOnEdges: boolean;
+  /**
    * A star-shaped hole through every crossing, for nails or glue: the
    * rounded corners of the four cells around it carried straight down, so
    * only walls of even width stay.
@@ -51,9 +56,9 @@ export interface BaseplateParams {
 
 /** One printable part of the baseplate, in drawer coordinates. */
 export interface BaseplatePiece {
-  /** Column letter (left to right) and row number (back to front). */
+  /** Column letter (left to right) and row number (front to back). */
   label: string;
-  /** Position of the part among the parts, from the back left. */
+  /** Position of the part among the parts, from the front left. */
   column: number;
   row: number;
   /** First grid column and row of the part, and how many it spans. */
@@ -64,8 +69,8 @@ export interface BaseplatePiece {
   /** Flat filler between the grid and the drawer wall on each side. */
   padLeft: number;
   padRight: number;
-  padBack: number;
   padFront: number;
+  padBack: number;
   /** Center of the part's outline. */
   centerX: number;
   centerY: number;
@@ -74,8 +79,8 @@ export interface BaseplatePiece {
   /** Sides that meet a neighboring part. */
   seamLeft: boolean;
   seamRight: boolean;
-  seamBack: boolean;
   seamFront: boolean;
+  seamBack: boolean;
 }
 
 /** Height of the Gridfinity receiving profile. */
@@ -122,7 +127,8 @@ export function defaultBaseplateParams(): BaseplateParams {
     solidFiller: true,
     nodeArmMm: 8,
     connectorHoles: true,
-    connectorHoleMm: 2,
+    connectorHoleMm: 1.9,
+    connectorHolesOnEdges: false,
     starHoles: true,
     cornerRadiusMm: BASEPLATE_STAR_MM,
     quality: { chordTolMm: 0.05 },
@@ -252,12 +258,12 @@ export function planBaseplate(params: BaseplateParams): BaseplatePiece[] | null 
       const last = { x: column === columns.length - 1, y: row === rows.length - 1 };
       const padLeft = first.x ? x.padStart : 0;
       const padRight = last.x ? x.padEnd : 0;
-      const padBack = first.y ? y.padStart : 0;
-      const padFront = last.y ? y.padEnd : 0;
+      const padFront = first.y ? y.padStart : 0;
+      const padBack = last.y ? y.padEnd : 0;
       const left = -x.span / 2 + x.padStart + startX * GRID_PITCH_MM - padLeft;
-      const back = -y.span / 2 + y.padStart + startY * GRID_PITCH_MM - padBack;
+      const front = -y.span / 2 + y.padStart + startY * GRID_PITCH_MM - padFront;
       const width = unitsX * GRID_PITCH_MM + padLeft + padRight;
-      const depth = unitsY * GRID_PITCH_MM + padBack + padFront;
+      const depth = unitsY * GRID_PITCH_MM + padFront + padBack;
       pieces.push({
         label: `${String.fromCharCode(65 + column)}${row + 1}`,
         column,
@@ -268,16 +274,16 @@ export function planBaseplate(params: BaseplateParams): BaseplatePiece[] | null 
         unitsY,
         padLeft,
         padRight,
-        padBack,
         padFront,
+        padBack,
         centerX: left + width / 2,
-        centerY: back + depth / 2,
+        centerY: front + depth / 2,
         width,
         depth,
         seamLeft: !first.x,
         seamRight: !last.x,
-        seamBack: !first.y,
-        seamFront: !last.y,
+        seamFront: !first.y,
+        seamBack: !last.y,
       });
       startY += unitsY;
     });
@@ -331,12 +337,12 @@ export function baseplatePrintKey(piece: BaseplatePiece): string {
   const key = (pads: number[], seams: boolean[]) =>
     `${piece.unitsX}x${piece.unitsY}|${pads.map((pad) => pad.toFixed(6)).join(',')}|${seams.join(',')}`;
   const asIs = key(
-    [piece.padLeft, piece.padRight, piece.padBack, piece.padFront],
-    [piece.seamLeft, piece.seamRight, piece.seamBack, piece.seamFront],
+    [piece.padLeft, piece.padRight, piece.padFront, piece.padBack],
+    [piece.seamLeft, piece.seamRight, piece.seamFront, piece.seamBack],
   );
   const turned = key(
-    [piece.padRight, piece.padLeft, piece.padFront, piece.padBack],
-    [piece.seamRight, piece.seamLeft, piece.seamFront, piece.seamBack],
+    [piece.padRight, piece.padLeft, piece.padBack, piece.padFront],
+    [piece.seamRight, piece.seamLeft, piece.seamBack, piece.seamFront],
   );
   return asIs < turned ? asIs : turned;
 }
@@ -363,13 +369,19 @@ export interface BaseplateLayout {
   bars: BaseplateRect[];
   /** The grid area that carries the receiving profile. */
   grid: BaseplateRect;
-  /** Grid line crossings: profile within `nodeArmMm` and star holes. */
+  /** Grid line crossings, with the profile within `nodeArmMm` of them. */
   crossings: [number, number][];
   /**
-   * Outer corners of the drawer that fall on this part: the corner point
-   * and the directions pointing into the part.
+   * Crossings that take a star hole: all but those on a grid edge with
+   * filler beyond it, where the hole would leave a notch against the filler.
    */
-  corners: { x: number; y: number; dx: number; dy: number }[];
+  starCrossings: [number, number][];
+  /**
+   * Outer corners of the drawer that fall on this part: the corner point,
+   * the directions pointing into the part, and the lower left corner of
+   * the grid cell next to it.
+   */
+  corners: { x: number; y: number; dx: number; dy: number; cell: [number, number] }[];
   /** Lower left corners of the grid cells. */
   cells: [number, number][];
   connectorHoles: BaseplateConnectorHole[];
@@ -396,25 +408,25 @@ function barSpan(at: number, lo: number, hi: number, width: number): [number, nu
  * The layout of one part: flat bars along every grid line, carried on
  * across the filler to the drawer walls and along the walls wherever
  * there is filler; the profile around the crossings; and the connector
- * holes across every seam through the half nodes on it. Crossings at the
- * ends of a seam get no connector: there the hole would run along another
- * seam or the drawer side.
+ * holes across every seam, or every edge when asked, through the half
+ * nodes on it. Crossings at the ends of an edge get no connector: there
+ * the hole would run along another edge.
  */
 export function baseplateLayout(params: BaseplateParams, piece: BaseplatePiece): BaseplateLayout {
   const left = -piece.width / 2;
   const right = piece.width / 2;
-  const back = -piece.depth / 2;
-  const front = piece.depth / 2;
+  const front = -piece.depth / 2;
+  const back = piece.depth / 2;
   const gridLeft = left + piece.padLeft;
-  const gridBack = back + piece.padBack;
+  const gridFront = front + piece.padFront;
   const grid = {
     x0: gridLeft,
     x1: gridLeft + piece.unitsX * GRID_PITCH_MM,
-    y0: gridBack,
-    y1: gridBack + piece.unitsY * GRID_PITCH_MM,
+    y0: gridFront,
+    y1: gridFront + piece.unitsY * GRID_PITCH_MM,
   };
   const xs = Array.from({ length: piece.unitsX + 1 }, (_, i) => gridLeft + i * GRID_PITCH_MM);
-  const ys = Array.from({ length: piece.unitsY + 1 }, (_, j) => gridBack + j * GRID_PITCH_MM);
+  const ys = Array.from({ length: piece.unitsY + 1 }, (_, j) => gridFront + j * GRID_PITCH_MM);
   const barXs = [
     ...xs,
     ...(piece.padLeft > 0 ? [left] : []),
@@ -422,27 +434,27 @@ export function baseplateLayout(params: BaseplateParams, piece: BaseplatePiece):
   ];
   const barYs = [
     ...ys,
-    ...(piece.padBack > 0 ? [back] : []),
     ...(piece.padFront > 0 ? [front] : []),
+    ...(piece.padBack > 0 ? [back] : []),
   ];
   const width = params.barWidthMm;
   // Solid filler: the strips between the grid and the walls, at bar height.
   const filler: BaseplateRect[] = !params.solidFiller
     ? []
     : [
-        ...(piece.padLeft > 0 ? [{ x0: left, x1: gridLeft, y0: back, y1: front }] : []),
-        ...(piece.padRight > 0 ? [{ x0: grid.x1, x1: right, y0: back, y1: front }] : []),
-        ...(piece.padBack > 0 ? [{ x0: left, x1: right, y0: back, y1: gridBack }] : []),
-        ...(piece.padFront > 0 ? [{ x0: left, x1: right, y0: grid.y1, y1: front }] : []),
+        ...(piece.padLeft > 0 ? [{ x0: left, x1: gridLeft, y0: front, y1: back }] : []),
+        ...(piece.padRight > 0 ? [{ x0: grid.x1, x1: right, y0: front, y1: back }] : []),
+        ...(piece.padFront > 0 ? [{ x0: left, x1: right, y0: front, y1: gridFront }] : []),
+        ...(piece.padBack > 0 ? [{ x0: left, x1: right, y0: grid.y1, y1: back }] : []),
       ];
   const bars: BaseplateRect[] = [
     ...filler,
     ...barXs.map((x) => {
       const [x0, x1] = barSpan(x, left, right, width);
-      return { x0, x1, y0: back, y1: front };
+      return { x0, x1, y0: front, y1: back };
     }),
     ...barYs.map((y) => {
-      const [y0, y1] = barSpan(y, back, front, width);
+      const [y0, y1] = barSpan(y, front, back, width);
       return { x0: left, x1: right, y0, y1 };
     }),
   ];
@@ -452,33 +464,51 @@ export function baseplateLayout(params: BaseplateParams, piece: BaseplatePiece):
   const reach = armBase / 2;
   const inner = (lines: number[]) => lines.slice(1, -1);
   const connectorHoles: BaseplateConnectorHole[] = [];
-  if (piece.seamLeft) {
+  if (piece.seamLeft || params.connectorHolesOnEdges) {
     connectorHoles.push(
       ...inner(ys).map((y) => ({ x: grid.x0 + reach, y, length, alongY: false })),
     );
   }
-  if (piece.seamRight) {
+  if (piece.seamRight || params.connectorHolesOnEdges) {
     connectorHoles.push(
       ...inner(ys).map((y) => ({ x: grid.x1 - reach, y, length, alongY: false })),
     );
   }
-  if (piece.seamBack) {
+  if (piece.seamFront || params.connectorHolesOnEdges) {
     connectorHoles.push(...inner(xs).map((x) => ({ x, y: grid.y0 + reach, length, alongY: true })));
   }
-  if (piece.seamFront) {
+  if (piece.seamBack || params.connectorHolesOnEdges) {
     connectorHoles.push(...inner(xs).map((x) => ({ x, y: grid.y1 - reach, length, alongY: true })));
   }
+  const crossings = xs.flatMap((x) => ys.map((y): [number, number] => [x, y]));
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+  const againstFiller = (x: number, y: number) =>
+    (piece.padLeft > 0 && near(x, grid.x0)) ||
+    (piece.padRight > 0 && near(x, grid.x1)) ||
+    (piece.padFront > 0 && near(y, grid.y0)) ||
+    (piece.padBack > 0 && near(y, grid.y1));
+  const corner = (x: number, y: number, dx: number, dy: number) => ({
+    x,
+    y,
+    dx,
+    dy,
+    cell: [
+      dx > 0 ? grid.x0 : grid.x1 - GRID_PITCH_MM,
+      dy > 0 ? grid.y0 : grid.y1 - GRID_PITCH_MM,
+    ] as [number, number],
+  });
   return {
     bars,
     grid,
-    crossings: xs.flatMap((x) => ys.map((y): [number, number] => [x, y])),
+    crossings,
+    starCrossings: crossings.filter(([x, y]) => !againstFiller(x, y)),
     cells: xs.slice(0, -1).flatMap((x) => ys.slice(0, -1).map((y): [number, number] => [x, y])),
     connectorHoles,
     corners: [
-      ...(!piece.seamLeft && !piece.seamBack ? [{ x: left, y: back, dx: 1, dy: 1 }] : []),
-      ...(!piece.seamRight && !piece.seamBack ? [{ x: right, y: back, dx: -1, dy: 1 }] : []),
-      ...(!piece.seamLeft && !piece.seamFront ? [{ x: left, y: front, dx: 1, dy: -1 }] : []),
-      ...(!piece.seamRight && !piece.seamFront ? [{ x: right, y: front, dx: -1, dy: -1 }] : []),
+      ...(!piece.seamLeft && !piece.seamFront ? [corner(left, front, 1, 1)] : []),
+      ...(!piece.seamRight && !piece.seamFront ? [corner(right, front, -1, 1)] : []),
+      ...(!piece.seamLeft && !piece.seamBack ? [corner(left, back, 1, -1)] : []),
+      ...(!piece.seamRight && !piece.seamBack ? [corner(right, back, -1, -1)] : []),
     ],
   };
 }

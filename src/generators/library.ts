@@ -602,7 +602,7 @@ export const GAME_LIBRARY: LibraryEntry[] = [
         ...defaultBaseplateParams(),
         drawerWidthMm: 600,
         drawerDepthMm: 423,
-        alignY: 'end',
+        alignY: 'start',
         solidFiller: true,
         cornerRadiusMm: BASEPLATE_STAR_MM,
       },

@@ -159,25 +159,19 @@ function starDrawing(x: number, y: number, grid: BaseplateRect): Drawing {
 
 /**
  * A rounded drawer corner as two paths of arcs: the region outside the
- * arc, and the bar that runs round it.
+ * arc, and the region inside it within the corner square.
  */
 function cornerDrawings(
   corner: { x: number; y: number; dx: number; dy: number },
   radius: number,
-  barWidth: number,
-): { outside: Drawing; arc: Drawing } {
+): { outside: Drawing; inside: Drawing } {
   const { x, y, dx, dy } = corner;
   const cx = x + dx * radius;
   const cy = y + dy * radius;
-  const onArc = (r: number): Point2D => [cx - (dx * r) / Math.SQRT2, cy - (dy * r) / Math.SQRT2];
-  const inner = Math.max(radius - barWidth, 0.01);
-  const outside = draw([x, y]).lineTo([cx, y]).threePointsArcTo([x, cy], onArc(radius)).close();
-  const arc = draw([cx, y])
-    .threePointsArcTo([x, cy], onArc(radius))
-    .lineTo([cx - dx * inner, cy])
-    .threePointsArcTo([cx, cy - dy * inner], onArc(inner))
-    .close();
-  return { outside, arc };
+  const onArc: Point2D = [cx - (dx * radius) / Math.SQRT2, cy - (dy * radius) / Math.SQRT2];
+  const outside = draw([x, y]).lineTo([cx, y]).threePointsArcTo([x, cy], onArc).close();
+  const inside = draw([cx, y]).threePointsArcTo([x, cy], onArc).lineTo([cx, cy]).close();
+  return { outside, inside };
 }
 
 function buildStepPiece(params: BaseplateParams, piece: BaseplatePiece, opening: Shape3D): Shape3D {
@@ -209,10 +203,10 @@ function buildStepPiece(params: BaseplateParams, piece: BaseplatePiece, opening:
   if (params.connectorHoles) {
     holes.push(...layout.connectorHoles.map((hole) => connectorHole(params, hole)));
   }
-  if (params.starHoles) {
+  if (params.starHoles && layout.starCrossings.length > 0) {
     holes.push(
       extrudeUnion(
-        layout.crossings.map(([x, y]) => starDrawing(x, y, layout.grid)),
+        layout.starCrossings.map(([x, y]) => starDrawing(x, y, layout.grid)),
         bottom,
         top,
       ),
@@ -221,10 +215,16 @@ function buildStepPiece(params: BaseplateParams, piece: BaseplatePiece, opening:
   let solid = oneByOne(asShape3D(nodes.fuse(bars)), holes, (merged, hole) => merged.cut(hole));
   const radius = params.cornerRadiusMm;
   for (const corner of radius > 0 ? layout.corners : []) {
-    // What lies outside the corner arc goes; a bar round the arc joins the wall bars.
-    const { outside, arc } = cornerDrawings(corner, radius, params.barWidthMm);
+    // What lies outside the corner arc goes; inside it the corner is filled
+    // at bar height up to the opening of the cell next to it.
+    const { outside, inside } = cornerDrawings(corner, radius);
+    const [cellX, cellY] = corner.cell;
+    const cell = asShape3D(
+      opening.clone().translate([cellX + GRID_PITCH_MM / 2, cellY + GRID_PITCH_MM / 2, 0]),
+    );
+    const fill = asShape3D(extrudeUnion([inside], 0, params.barHeightMm).cut(cell));
     solid = asShape3D(solid.cut(extrudeUnion([outside], bottom, top)));
-    solid = asShape3D(solid.fuse(extrudeUnion([arc], 0, params.barHeightMm)));
+    solid = asShape3D(solid.fuse(fill));
   }
   return asShape3D(solid.translate([piece.centerX, piece.centerY, 0]));
 }

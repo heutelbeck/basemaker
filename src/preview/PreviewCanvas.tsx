@@ -27,8 +27,6 @@ interface PreviewCanvasProps {
   showOverhangs: boolean;
   /** Changes whenever a job is loaded; the next model shown is framed anew. */
   loadCount: number;
-  /** The model's front faces +Y, so the camera frames it from that side. */
-  frontAtPlusY: boolean;
 }
 
 interface PreviewScene {
@@ -41,7 +39,6 @@ interface PreviewScene {
   grid: GridHelper;
   gridSize: number;
   framed: boolean;
-  frontAtPlusY: boolean;
 }
 
 const BODY_PREVIEW_COLOR = 0xc8ccd4;
@@ -51,8 +48,6 @@ const GRID_MIN_MM = 200;
 const GRID_STEP_MM = 100;
 /** View direction for framing a model whose front faces -Y: from the front right, above. */
 const FRAME_DIRECTION = new Vector3(1, -1, 0.9).normalize();
-/** The same view for a model whose front faces +Y. */
-const FRAME_DIRECTION_PLUS_Y = new Vector3(-1, 1, 0.9).normalize();
 /** The near plane sits this share of the viewing distance in front of the camera. */
 const NEAR_SHARE = 0.05;
 const NEAR_MIN_MM = 0.05;
@@ -102,7 +97,6 @@ function createPreviewScene(container: HTMLDivElement): PreviewScene {
     grid,
     gridSize: GRID_MIN_MM,
     framed: false,
-    frontAtPlusY: false,
   };
 }
 
@@ -160,9 +154,7 @@ function frameModel(preview: PreviewScene, box: Box3): void {
   const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect);
   const distance = (radius * FRAME_MARGIN) / Math.sin(Math.min(vertical, horizontal) / 2);
   box.getCenter(controls.target);
-  camera.position
-    .copy(controls.target)
-    .addScaledVector(preview.frontAtPlusY ? FRAME_DIRECTION_PLUS_Y : FRAME_DIRECTION, distance);
+  camera.position.copy(controls.target).addScaledVector(FRAME_DIRECTION, distance);
 }
 
 function disposeParts(group: Group): void {
@@ -181,7 +173,6 @@ export function PreviewCanvas({
   overhangOverlay,
   showOverhangs,
   loadCount,
-  frontAtPlusY,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<PreviewScene | null>(null);
@@ -275,13 +266,6 @@ export function PreviewCanvas({
       preview.framed = false;
     }
   }, [loadCount]);
-
-  useEffect(() => {
-    const preview = sceneRef.current;
-    if (preview !== null) {
-      preview.frontAtPlusY = frontAtPlusY;
-    }
-  }, [frontAtPlusY]);
 
   useEffect(() => {
     const preview = sceneRef.current;

@@ -47,9 +47,9 @@ export function BaseplatePanel() {
       {pieces !== null && (
         <>
           <p className="freeform-hint">
-            {x.units} x {y.units} units in {pieces.length} parts. Filler seen from the front: right{' '}
-            {x.padStart.toFixed(1)}, left {x.padEnd.toFixed(1)}, back {y.padStart.toFixed(1)}, front{' '}
-            {y.padEnd.toFixed(1)} mm.
+            {x.units} x {y.units} units in {pieces.length} parts. Filler seen from the front: left{' '}
+            {x.padStart.toFixed(1)}, right {x.padEnd.toFixed(1)}, front {y.padStart.toFixed(1)},
+            back {y.padEnd.toFixed(1)} mm.
           </p>
           <ul className="freeform-hint">
             {[...prints.values()].map((print) => (
@@ -81,13 +81,13 @@ export function BaseplatePanel() {
       <Select
         label="Grid across the drawer"
         value={params.alignX}
-        options={alignOptions('right', 'left')}
+        options={alignOptions('left', 'right')}
         onChange={(alignX) => update({ alignX: alignX as BaseplateAlign })}
       />
       <Select
         label="Grid along the drawer depth"
         value={params.alignY}
-        options={alignOptions('back', 'front')}
+        options={alignOptions('front', 'back')}
         onChange={(alignY) => update({ alignY: alignY as BaseplateAlign })}
       />
       <NumberField
@@ -127,6 +127,13 @@ export function BaseplatePanel() {
         checked={params.connectorHoles}
         onChange={(connectorHoles) => update({ connectorHoles })}
       />
+      {params.connectorHoles && (
+        <Toggle
+          label="Connector holes on the outer edges too, to join parts later"
+          checked={params.connectorHolesOnEdges}
+          onChange={(connectorHolesOnEdges) => update({ connectorHolesOnEdges })}
+        />
+      )}
       {params.connectorHoles && (
         <NumberField
           label="Connector hole diameter"
@@ -180,9 +187,8 @@ export function BaseplatePanel() {
         onChange={(nodeArmMm) => update({ nodeArmMm })}
       />
       <p className="freeform-hint">
-        The front is +Y. Push a piece of 1.75 mm filament through each seam hole from the open cell
-        into the neighboring part and trim it flush. Parts that match after a half turn are one
-        print.
+        Push a piece of 1.75 mm filament through each seam hole from the open cell into the
+        neighboring part and trim it flush. Parts that match after a half turn are one print.
       </p>
     </Section>
   );
