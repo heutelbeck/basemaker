@@ -121,8 +121,9 @@ const api = {
   async exportStep(job: Job): Promise<ArrayBuffer> {
     const { ensureOcct } = await import('../geometry/step/occtContext.ts');
     await ensureOcct();
-    const shape = await buildJobStep(job);
-    const blob = shape.blobSTEP();
+    const model = await buildJobStep(job);
+    const { exportSTEP } = await import('replicad');
+    const blob = Array.isArray(model) ? exportSTEP(model) : model.blobSTEP();
     const buffer = await blob.arrayBuffer();
     return transfer(buffer, [buffer]);
   },

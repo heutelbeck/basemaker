@@ -440,11 +440,14 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
   }
 }
 
+/** A STEP model: one shape, or named parts that load as separate bodies. */
+export type JobStep = Shape3D | { name: string; shape: Shape3D; color: string }[];
+
 /**
- * Builds the B-rep solid for STEP export. Requires an initialized OCCT.
+ * Builds the B-rep model for STEP export. Requires an initialized OCCT.
  * Loaded dynamically so the replicad layer stays out of the mesh bundle.
  */
-export async function buildJobStep(job: Job): Promise<Shape3D> {
+export async function buildJobStep(job: Job): Promise<JobStep> {
   switch (job.generator) {
     case 'base': {
       const { buildStepBaseParts } = await import('../geometry/step/buildStepBase.ts');
@@ -477,8 +480,12 @@ export async function buildJobStep(job: Job): Promise<Shape3D> {
     case 'paintRack':
       throw new Error(ERROR_STEP_PAINT_RACK);
     case 'baseplate': {
-      const { buildStepBaseplate } = await import('../geometry/step/buildStepBaseplate.ts');
-      return buildStepBaseplate(job.params);
+      const { buildStepBaseplateParts } = await import('../geometry/step/buildStepBaseplate.ts');
+      return buildStepBaseplateParts(job.params).map(({ piece, shape }) => ({
+        name: `part ${piece.label}`,
+        shape,
+        color: RACK_COLORS[(piece.column + piece.row) % RACK_COLORS.length],
+      }));
     }
   }
 }

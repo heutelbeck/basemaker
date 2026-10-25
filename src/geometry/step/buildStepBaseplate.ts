@@ -13,6 +13,7 @@ import {
   BASEPLATE_PROFILE_HEIGHT_MM,
   BASEPLATE_STAR_MM,
   baseplateLayout,
+  baseplatePrintKey,
   connectorHoleZ,
 } from '../../params/baseplate.ts';
 import { GRID_PITCH_MM } from '../../params/paintRack.ts';
@@ -174,67 +175,210 @@ function cornerDrawings(
   return { outside, inside };
 }
 
-function buildStepPiece(params: BaseplateParams, piece: BaseplatePiece, opening: Shape3D): Shape3D {
-  const layout = baseplateLayout(params, piece);
-  const arm = params.nodeArmMm;
-  const openings = layout.cells.map(([x, y]) =>
-    asShape3D(opening.clone().translate([x + GRID_PITCH_MM / 2, y + GRID_PITCH_MM / 2, 0])),
+/** Everything that makes one node differ from another, in the node's own frame. */
+interface NodeVariant {
+  /**
+   * The node's extent, clipped to the grid and to half a unit round the
+   * crossing; it also clips the star hole to the quadrants inside the grid.
+   */
+  box: BaseplateRect;
+  star: boolean;
+  holes: BaseplateConnectorHole[];
+}
+
+function nodeKey(variant: NodeVariant): string {
+  const round = (value: number) => value.toFixed(4);
+  const { box, star, holes } = variant;
+  return [
+    [box.x0, box.x1, box.y0, box.y1].map(round).join(','),
+    star,
+    holes.map((hole) => `${round(hole.x)},${round(hole.y)},${hole.alongY}`).join(';'),
+  ].join('|');
+}
+
+/**
+ * A full node at the origin: the receiving profile within half a unit of
+ * the crossing less the openings of the four cells round it, kept within
+ * the arm reach, whose ends slope down outwards at 45 degrees.
+ */
+function buildFullNode(params: BaseplateParams, opening: Shape3D): Shape3D {
+  const half = GRID_PITCH_MM / 2;
+  const plate = extrudeUnion(
+    [rectDrawing({ x0: -half, x1: half, y0: -half, y1: half })],
+    0,
+    BASEPLATE_PROFILE_HEIGHT_MM,
   );
-  const plate = extrudeUnion([rectDrawing(layout.grid)], 0, BASEPLATE_PROFILE_HEIGHT_MM);
-  const profile = oneByOne(plate, openings, (merged, cell) => merged.cut(cell));
-  // Each node a square frustum: the arm length at the top, its ends sloping
-  // down outwards at 45 degrees.
-  const bottom = -BASEPLATE_CUT_MM;
-  const top = BASEPLATE_PROFILE_HEIGHT_MM + BASEPLATE_CUT_MM;
-  const level = (x: number, y: number, z: number) => {
-    const half = arm + BASEPLATE_PROFILE_HEIGHT_MM - z;
-    return rectDrawing({ x0: x - half, x1: x + half, y0: y - half, y1: y + half }).sketchOnPlane(
+  const cells = [-1, 1].flatMap((sx) =>
+    [-1, 1].map((sy) => asShape3D(opening.clone().translate([sx * half, sy * half, 0]))),
+  );
+  const profile = oneByOne(plate, cells, (merged, cell) => merged.cut(cell));
+  const level = (z: number) => {
+    const reach = params.nodeArmMm + BASEPLATE_PROFILE_HEIGHT_MM - z;
+    return rectDrawing({ x0: -reach, x1: reach, y0: -reach, y1: reach }).sketchOnPlane(
       'XY',
       z,
     ) as Sketch;
   };
-  const frustums = layout.crossings.map(([x, y]) =>
-    asShape3D(level(x, y, bottom).loftWith(level(x, y, top), { ruled: true })),
+  const bottom = -BASEPLATE_CUT_MM;
+  const top = BASEPLATE_PROFILE_HEIGHT_MM + BASEPLATE_CUT_MM;
+  return asShape3D(
+    profile.intersect(asShape3D(level(bottom).loftWith(level(top), { ruled: true }))),
   );
-  const reach = oneByOne(frustums[0], frustums.slice(1), (merged, node) => merged.fuse(node));
-  const nodes = asShape3D(profile.intersect(reach));
-  const bars = extrudeUnion([barOutline(layout.bars)], 0, params.barHeightMm);
-  const holes: Shape3D[] = [];
-  if (params.connectorHoles) {
-    holes.push(...layout.connectorHoles.map((hole) => connectorHole(params, hole)));
+}
+
+/** A node variant: the full node clipped to its box, with its holes cut. */
+function buildNode(params: BaseplateParams, variant: NodeVariant, full: Shape3D): Shape3D {
+  const half = GRID_PITCH_MM / 2;
+  const { box } = variant;
+  const bottom = -BASEPLATE_CUT_MM;
+  const top = BASEPLATE_PROFILE_HEIGHT_MM + BASEPLATE_CUT_MM;
+  const clipped =
+    [box.x0, box.y0].every((low) => low <= -half + 1e-6) &&
+    [box.x1, box.y1].every((high) => high >= half - 1e-6)
+      ? asShape3D(full.clone())
+      : asShape3D(full.clone().intersect(extrudeUnion([rectDrawing(box)], bottom, top)));
+  const holes = variant.holes.map((hole) => connectorHole(params, hole));
+  if (variant.star) {
+    holes.push(extrudeUnion([starDrawing(0, 0, box)], bottom, top));
   }
-  if (params.starHoles && layout.starCrossings.length > 0) {
-    holes.push(
-      extrudeUnion(
-        layout.starCrossings.map(([x, y]) => starDrawing(x, y, layout.grid)),
-        bottom,
-        top,
-      ),
-    );
-  }
-  let solid = oneByOne(asShape3D(nodes.fuse(bars)), holes, (merged, hole) => merged.cut(hole));
+  return oneByOne(clipped, holes, (merged, hole) => merged.cut(hole));
+}
+
+/** Node variants built so far, shared by the parts of one drawer. */
+interface NodeCache {
+  full: Shape3D;
+  variants: Map<string, Shape3D>;
+}
+
+/**
+ * One part, centered on its outline. Nodes come in few variants, so each
+ * is built once and placed at its crossings. Every node stays within half
+ * a unit of its crossing, so the nodes never overlap each other and join
+ * the bars in a single boolean.
+ */
+function buildStepPiece(
+  params: BaseplateParams,
+  piece: BaseplatePiece,
+  opening: Shape3D,
+  cache: NodeCache,
+): Shape3D {
+  const layout = baseplateLayout(params, piece);
+  const half = GRID_PITCH_MM / 2;
+  const { grid } = layout;
+  const holes = params.connectorHoles ? layout.connectorHoles : [];
+  const starCrossings = params.starHoles ? layout.starCrossings : [];
+  const stars = new Set(starCrossings.map(([x, y]) => `${x},${y}`));
+  const nodes = layout.crossings.map(([x, y]) => {
+    const box = {
+      x0: Math.max(x - half, grid.x0) - x,
+      x1: Math.min(x + half, grid.x1) - x,
+      y0: Math.max(y - half, grid.y0) - y,
+      y1: Math.min(y + half, grid.y1) - y,
+    };
+    const variant: NodeVariant = {
+      box,
+      star: stars.has(`${x},${y}`),
+      // Every hole that reaches into the node's box, in the node's frame.
+      holes: holes
+        .map((hole) => ({ ...hole, x: hole.x - x, y: hole.y - y }))
+        .filter((hole) => {
+          const along = hole.length / 2;
+          const across = params.connectorHoleMm;
+          const [rx, ry] = hole.alongY ? [across, along] : [along, across];
+          return (
+            hole.x + rx > box.x0 &&
+            hole.x - rx < box.x1 &&
+            hole.y + ry > box.y0 &&
+            hole.y - ry < box.y1
+          );
+        }),
+    };
+    const key = nodeKey(variant);
+    let node = cache.variants.get(key);
+    if (node === undefined) {
+      node = buildNode(params, variant, cache.full);
+      cache.variants.set(key, node);
+    }
+    return asShape3D(node.clone().translate([x, y, 0]));
+  });
+  const lattice = extrudeUnion([barOutline(layout.bars)], 0, params.barHeightMm);
+  // The star holes run on through the bars; they lie apart from each other.
+  const bars =
+    starCrossings.length === 0
+      ? lattice
+      : asShape3D(
+          lattice.cut(
+            extrudeUnion(
+              starCrossings.map(([x, y]) => starDrawing(x, y, grid)),
+              -BASEPLATE_CUT_MM,
+              params.barHeightMm + BASEPLATE_CUT_MM,
+            ),
+          ),
+        );
+  let solid = asShape3D(bars.fuse(makeCompound(nodes) as unknown as Shape3D));
+  const bottom = -BASEPLATE_CUT_MM;
+  const top = BASEPLATE_PROFILE_HEIGHT_MM + BASEPLATE_CUT_MM;
   const radius = params.cornerRadiusMm;
   for (const corner of radius > 0 ? layout.corners : []) {
     // What lies outside the corner arc goes; inside it the corner is filled
     // at bar height up to the opening of the cell next to it.
     const { outside, inside } = cornerDrawings(corner, radius);
     const [cellX, cellY] = corner.cell;
-    const cell = asShape3D(
-      opening.clone().translate([cellX + GRID_PITCH_MM / 2, cellY + GRID_PITCH_MM / 2, 0]),
-    );
+    const cell = asShape3D(opening.clone().translate([cellX + half, cellY + half, 0]));
     const fill = asShape3D(extrudeUnion([inside], 0, params.barHeightMm).cut(cell));
     solid = asShape3D(solid.cut(extrudeUnion([outside], bottom, top)));
     solid = asShape3D(solid.fuse(fill));
   }
-  return asShape3D(solid.translate([piece.centerX, piece.centerY, 0]));
+  return solid;
 }
 
-/**
- * The B-rep baseplate for STEP export: every part of the drawer in place,
- * as a compound of separate solids. Requires an initialized OCCT.
- */
-export function buildStepBaseplate(params: BaseplateParams): Shape3D {
+/** Whether two parts have the same filler and seams on the same sides. */
+function sameSides(a: BaseplatePiece, b: BaseplatePiece): boolean {
+  const sides = (piece: BaseplatePiece) =>
+    [
+      piece.padLeft,
+      piece.padRight,
+      piece.padFront,
+      piece.padBack,
+      piece.seamLeft,
+      piece.seamRight,
+      piece.seamFront,
+      piece.seamBack,
+    ].join(',');
+  return sides(a) === sides(b);
+}
+
+/** The B-rep parts of the drawer for STEP export, each in place. Requires an initialized OCCT. */
+export function buildStepBaseplateParts(
+  params: BaseplateParams,
+): { piece: BaseplatePiece; shape: Shape3D }[] {
   const opening = cellOpening();
-  const parts = baseplatePieces(params).map((piece) => buildStepPiece(params, piece, opening));
+  const cache: NodeCache = { full: buildFullNode(params, opening), variants: new Map() };
+  // Parts that print the same are built once: copied as they are, or
+  // turned by half a turn when they match only that way.
+  const built = new Map<string, { piece: BaseplatePiece; solid: Shape3D }>();
+  return baseplatePieces(params).map((piece) => {
+    const key = baseplatePrintKey(piece);
+    const twin = built.get(key);
+    let solid: Shape3D;
+    if (twin === undefined) {
+      solid = buildStepPiece(params, piece, opening, cache);
+      built.set(key, { piece, solid });
+    } else {
+      const copy = asShape3D(twin.solid.clone());
+      solid = sameSides(twin.piece, piece)
+        ? copy
+        : asShape3D(copy.rotate(180, [0, 0, 0], [0, 0, 1]));
+    }
+    return {
+      piece,
+      shape: asShape3D(solid.clone().translate([piece.centerX, piece.centerY, 0])),
+    };
+  });
+}
+
+/** The B-rep baseplate as one compound of its parts. Requires an initialized OCCT. */
+export function buildStepBaseplate(params: BaseplateParams): Shape3D {
+  const parts = buildStepBaseplateParts(params).map(({ shape }) => shape);
   return parts.length === 1 ? parts[0] : (makeCompound(parts) as unknown as Shape3D);
 }
