@@ -608,6 +608,21 @@ export const GAME_LIBRARY: LibraryEntry[] = [
       },
     },
   },
+  {
+    system: 'Gridfinity',
+    name: 'Baseplate: IKEA Alex narrow drawer (new model), 296 x 423 mm',
+    job: {
+      generator: 'baseplate',
+      params: {
+        ...defaultBaseplateParams(),
+        drawerWidthMm: 296,
+        drawerDepthMm: 423,
+        alignY: 'start',
+        solidFiller: true,
+        cornerRadiusMm: BASEPLATE_STAR_MM,
+      },
+    },
+  },
 ];
 
 export const GAME_SYSTEMS: GameSystem[] = [
