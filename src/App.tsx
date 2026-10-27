@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { GeneratorId } from './generators/job.ts';
-import { GENERATOR_LABELS, defaultJobFor } from './generators/job.ts';
+import { GENERATOR_LABELS, defaultJobFor, generatorFromSlug } from './generators/job.ts';
 import { PreviewCanvas } from './preview/PreviewCanvas.tsx';
 import { bootstrapGeometry, useAppStore } from './state/store.ts';
+import { BusyBadge } from './ui/BusyBadge.tsx';
 import { Select } from './ui/controls/Select.tsx';
 import { CrystalPanel, PlantsPanel, RockPanel } from './ui/panels/DecorPanels.tsx';
 import { BaseplatePanel } from './ui/panels/BaseplatePanel.tsx';
@@ -26,7 +27,6 @@ import { SurfacePanel } from './ui/panels/SurfacePanel.tsx';
 export function App() {
   const parts = useAppStore((state) => state.parts);
   const stats = useAppStore((state) => state.stats);
-  const busy = useAppStore((state) => state.busy);
   const issues = useAppStore((state) => state.issues);
   const generator = useAppStore((state) => state.job.generator);
   const overhangOverlay = useAppStore((state) => state.overhangOverlay);
@@ -44,6 +44,15 @@ export function App() {
 
   useEffect(() => {
     bootstrapGeometry();
+    // Back, forward and an edited address switch the generator like the dropdown does.
+    const followFragment = () => {
+      const named = generatorFromSlug(window.location.hash);
+      if (named !== null && named !== useAppStore.getState().job.generator) {
+        useAppStore.getState().replaceJob(defaultJobFor(named));
+      }
+    };
+    window.addEventListener('hashchange', followFragment);
+    return () => window.removeEventListener('hashchange', followFragment);
   }, []);
 
   return (
@@ -107,7 +116,7 @@ export function App() {
           showOverhangs={showOverhangs}
           loadCount={loadCount}
         />
-        {busy && <div className="busy-badge">Rebuilding</div>}
+        <BusyBadge />
         {issues.length > 0 && (
           <div className="stale-badge">
             Invalid parameters; showing the last valid model. See the export panel for details.

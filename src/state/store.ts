@@ -1,8 +1,14 @@
 import { create } from 'zustand';
-import type { Job, JobPart, JobStats } from '../generators/job.ts';
+import type { BuildProgress, GeneratorId, Job, JobPart, JobStats } from '../generators/job.ts';
 import type { PartsDownload } from '../export/partsDownload.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
-import { defaultJob, validateJob } from '../generators/job.ts';
+import {
+  defaultJob,
+  defaultJobFor,
+  generatorFromSlug,
+  generatorSlug,
+  validateJob,
+} from '../generators/job.ts';
 import type { BaseParams } from '../params/types.ts';
 import type { ValidationIssue } from '../params/validate.ts';
 import { registerLocalFont } from '../geometry/lettering/font.ts';
@@ -17,6 +23,10 @@ export interface AppState {
   showOverhangs: boolean;
   showMockParts: boolean;
   busy: boolean;
+  /** When the running build started, so the viewport can count the seconds. */
+  busySince: number | null;
+  /** How far the running build has come, when its generator reports that. */
+  progress: BuildProgress | null;
   buildError: string | null;
   /** Counts loaded jobs, so the preview can frame each newly loaded model. */
   loadCount: number;
@@ -30,34 +40,63 @@ let client: GeometryClient | null = null;
 
 function geometryClient(): GeometryClient {
   if (client === null) {
-    client = new GeometryClient((result, error) => {
-      if (result !== null) {
-        useAppStore.setState({
-          parts: result.parts,
-          stats: result.stats,
-          overhangOverlay: result.overhangOverlay,
-          busy: false,
-          buildError: null,
-        });
-      } else {
-        useAppStore.setState({ busy: false, buildError: error });
-      }
-    });
+    client = new GeometryClient(
+      (result, error) => {
+        if (result !== null) {
+          useAppStore.setState({
+            parts: result.parts,
+            stats: result.stats,
+            overhangOverlay: result.overhangOverlay,
+            busy: false,
+            busySince: null,
+            progress: null,
+            buildError: null,
+          });
+        } else {
+          useAppStore.setState({ busy: false, busySince: null, progress: null, buildError: error });
+        }
+      },
+      (progress) => {
+        useAppStore.setState({ progress });
+      },
+    );
   }
   return client;
 }
 
+/** The job a page opens with: the generator its URL fragment names, or the base. */
+function initialJob(): Job {
+  const generator = typeof window === 'undefined' ? null : generatorFromSlug(window.location.hash);
+  return generator === null ? defaultJob() : defaultJobFor(generator);
+}
+
+/**
+ * Keeps the URL fragment naming the active generator, so the address bar
+ * always holds a link to it. The entry is replaced, not pushed, so the
+ * history does not fill up with every change.
+ */
+function syncFragment(generator: GeneratorId): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const fragment = `#${generatorSlug(generator)}`;
+  if (window.location.hash !== fragment) {
+    window.history.replaceState(null, '', fragment);
+  }
+}
+
 function applyJob(job: Job): Partial<AppState> {
+  syncFragment(job.generator);
   const issues = validateJob(job);
   if (issues.length === 0) {
     geometryClient().requestBuild(job);
-    return { job, issues, busy: true, buildError: null };
+    return { job, issues, busy: true, busySince: Date.now(), progress: null, buildError: null };
   }
   return { job, issues, busy: false };
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  job: defaultJob(),
+  job: initialJob(),
   issues: [],
   parts: null,
   stats: null,
@@ -65,6 +104,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   showOverhangs: false,
   showMockParts: true,
   busy: false,
+  busySince: null,
+  progress: null,
   buildError: null,
   loadCount: 0,
   setJob: (update) => {

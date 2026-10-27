@@ -78,6 +78,34 @@ export const GENERATOR_LABELS: Record<GeneratorId, string> = {
   baseplate: 'Gridfinity baseplate',
 };
 
+/** Name of each generator in the URL fragment, so a link opens it directly. */
+const GENERATOR_SLUGS: Record<GeneratorId, string> = {
+  base: 'base',
+  movementTray: 'movement-tray',
+  adapterTray: 'adapter-tray',
+  rock: 'rock',
+  crystal: 'crystal',
+  plants: 'plants',
+  ruler: 'ruler',
+  template: 'template',
+  paintRack: 'paint-rack',
+  baseplate: 'baseplate',
+};
+
+/** The URL fragment naming a generator, without the hash sign. */
+export function generatorSlug(generator: GeneratorId): string {
+  return GENERATOR_SLUGS[generator];
+}
+
+/** The generator a URL fragment names, with or without its hash sign; null for anything else. */
+export function generatorFromSlug(fragment: string): GeneratorId | null {
+  const slug = fragment.startsWith('#') ? fragment.slice(1) : fragment;
+  const match = (Object.keys(GENERATOR_SLUGS) as GeneratorId[]).find(
+    (id) => GENERATOR_SLUGS[id] === slug,
+  );
+  return match ?? null;
+}
+
 const ERROR_STEP_PAINT_RACK = 'STEP export of paint racks is not yet implemented.';
 const ERROR_STEP_MESH_ONLY =
   'This generator produces organic mesh geometry and has no STEP form; export STL or 3MF instead.';
@@ -236,6 +264,16 @@ export interface JobBundle {
   overhangOverlay: RawMesh | null;
 }
 
+/** How far a build of several pieces has come, for example the racks of a drawer. */
+export interface BuildProgress {
+  done: number;
+  total: number;
+  /** What the pieces are, in the plural. */
+  pieces: string;
+}
+
+export type ProgressListener = (progress: BuildProgress) => void;
+
 const BODY_COLOR = '#1A1A1A';
 const BOTTLE_PREVIEW_COLOR = '#B8462E';
 /** Alternating tones so neighboring racks of a drawer read apart. */
@@ -271,7 +309,11 @@ function mergeOverlays(overlays: RawMesh[]): RawMesh | null {
  * are a single part; a base with rim lettering yields the body plus the
  * letter solids so slicers and the preview can color them separately.
  */
-export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<JobBundle> {
+export async function buildJobBundle(
+  wasm: ManifoldToplevel,
+  job: Job,
+  onProgress?: ProgressListener,
+): Promise<JobBundle> {
   const solids: {
     name: string;
     colorHex: string;
@@ -345,7 +387,10 @@ export async function buildJobBundle(wasm: ManifoldToplevel, job: Job): Promise<
     } else if (job.generator === 'paintRack') {
       const { buildPaintRackBottles, buildPaintRacks } =
         await import('../geometry/buildPaintRack.ts');
-      buildPaintRacks(wasm, job.params).forEach(({ rack, solid }, index) => {
+      const racks = buildPaintRacks(wasm, job.params, (done, total) =>
+        onProgress?.({ done, total, pieces: 'racks' }),
+      );
+      racks.forEach(({ rack, solid }, index) => {
         solids.push({
           name: `rack ${rack.label} ${rack.unitsX}x${rack.unitsY}`,
           colorHex: RACK_COLORS[index % RACK_COLORS.length],

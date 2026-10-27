@@ -130,16 +130,26 @@ export function PaintRackPanel() {
         )}
         {tilted && (
           <NumberField
-            label={
-              params.fill === 'filled' || params.fill === 'block'
-                ? 'Top height: support length along the bottle'
-                : 'Support length along the bottle'
-            }
+            label="Top height: support length along the bottle"
             unit="mm"
             value={params.supportLengthMm}
             min={10}
             step={1}
             onChange={(supportLengthMm) => update({ supportLengthMm })}
+          />
+        )}
+        {tilted && (
+          <Toggle
+            label="Bore mouths start steeper: thicker lips and points on top"
+            checked={params.easeMouths}
+            onChange={(easeMouths) => update({ easeMouths })}
+          />
+        )}
+        {tilted && (
+          <Toggle
+            label="Round the top edges of the bores and blunt the points between them"
+            checked={params.roundMouths}
+            onChange={(roundMouths) => update({ roundMouths })}
           />
         )}
         <div className="field-row">
@@ -173,6 +183,21 @@ export function PaintRackPanel() {
             label="Modules in a row: one bottle row per grid unit, caps reach over the next module"
             checked={params.tileModules}
             onChange={(tileModules) => update({ tileModules })}
+          />
+        )}
+        {tilted && params.tileModules && (
+          <Select
+            label="End modules for the grid units the whole modules leave"
+            value={params.endModules}
+            options={[
+              { value: 'right', label: 'One at the right' },
+              { value: 'left', label: 'One at the left' },
+              { value: 'both', label: 'One at each side, mirror images' },
+              { value: 'none', label: 'None, leave those units empty' },
+            ]}
+            onChange={(endModules) =>
+              update({ endModules: endModules as PaintRackParams['endModules'] })
+            }
           />
         )}
         {tilted && !params.tileModules && (

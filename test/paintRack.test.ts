@@ -3,7 +3,13 @@ import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { paintRackDownload } from '../src/export/paintRackZip.ts';
 import { buildJobBundle } from '../src/generators/job.ts';
-import { buildPaintRack, buildPaintRacks } from '../src/geometry/buildPaintRack.ts';
+import {
+  buildPaintRack,
+  buildPaintRackModule,
+  buildPaintRacks,
+} from '../src/geometry/buildPaintRack.ts';
+import { toRawMesh } from '../src/geometry/mesh.ts';
+import { writeBinaryStl } from '../src/export/stlBinary.ts';
 import { getManifold } from '../src/geometry/manifoldContext.ts';
 import type { PaintRackParams, Vec3 } from '../src/params/paintRack.ts';
 import {
@@ -27,14 +33,13 @@ import {
 const DRAWER_HEIGHT_MM = 67;
 
 /** A single 5x4 rack unless the overrides say otherwise. */
-/** The fast-print setup: staggered rib racks spread across the drawer. */
+/** The classic setup: staggered racks spread across the drawer. */
 function classic(overrides: Partial<PaintRackParams> = {}): PaintRackParams {
   return {
     ...defaultPaintRackParams(),
     clearanceMm: 0.7,
     maxHeightMm: 67,
     arrangement: 'staggered',
-    fill: 'ribs',
     tileModules: false,
     bottleGapMm: 0.8,
     ...overrides,
@@ -89,9 +94,9 @@ function baseplateKeepOut(wasm: ManifoldToplevel, params: PaintRackParams): Mani
   const cells: Manifold[] = [];
   for (let i = 0; i < params.unitsX; i++) {
     for (let j = 0; j < params.unitsY; j++) {
-      const points: [number, number, number][] = [];
-      for (const z of [0, 0.8, 2.6, FOOT_HEIGHT_MM]) {
+      const outline = (z: number): [number, number, number][] => {
         const radius = footRadiusAt(z);
+        const points: [number, number, number][] = [];
         for (let k = 0; k < 64; k++) {
           const angle = (2 * Math.PI * k) / 64;
           const sx = Math.cos(angle) >= 0 ? 1 : -1;
@@ -106,10 +111,13 @@ function baseplateKeepOut(wasm: ManifoldToplevel, params: PaintRackParams): Mani
             z,
           ]);
         }
+        return points;
+      };
+      // One hull per profile segment keeps the vertical section of the foot.
+      const levels = [0, 0.8, 2.6, FOOT_HEIGHT_MM];
+      for (let n = 1; n < levels.length; n++) {
+        cells.push(wasm.Manifold.hull([...outline(levels[n - 1]), ...outline(levels[n])]));
       }
-      // The foot cavity of the baseplate reaches below the bin foot.
-      cells.push(wasm.Manifold.hull(points));
-      cells.push(wasm.Manifold.hull(points.filter(([, , z]) => z === 0)).translate(0, 0, 0));
     }
   }
   const below = wasm.Manifold.cube([width + 40, depth + 40, 20], true).translate(0, 0, -10);
@@ -173,19 +181,40 @@ describe('paint rack for low drawers', () => {
         new Set(racks.flatMap((r) => Array.from({ length: r.unitsY }, (_, i) => r.startY + i)));
       const trimmed = rowsOf(planRacks(params));
       expect(rowsOf(planRacks(full))).toEqual(new Set([0, 1, 2, 3, 4, 5]));
-      const solids = buildPaintRacks(wasm, full);
+      const layout = solvePaintRack(params);
+      const tilt = layout?.tiltDeg ?? 0;
+      const [ax, ay, az] = axisDirection(tilt);
+      const length = Math.min(params.supportLengthMm, params.bottle.lengthMm);
+      // The plan extent the rack holds of a bottle: from the end stop and
+      // wall behind its bottom to the support length along its axis, plus a
+      // wall in front; an upright well holds the whole bottle width.
+      const held = (anchor: Vec3) => {
+        const size = 1000;
+        const belowBottom = wasm.Manifold.cube([size, size, size], true)
+          .translate(0, 0, 2 - size / 2)
+          .rotate([tilt - 90, 0, 0])
+          .translate(anchor[0], anchor[1], anchor[2]);
+        const bottom = bottleSolid(wasm, params, anchor, tilt).intersect(belowBottom);
+        const rear = bottom.translate(0, -(END_STOP_MM + params.wallMm), 0);
+        const tip =
+          params.orientation === 'upright'
+            ? bottom.translate(ax * length, ay * length + params.wallMm, az * length)
+            : wasm.Manifold.cube([1, 1, 1], true).translate(
+                anchor[0] + ax * length,
+                anchor[1] + ay * length + params.wallMm,
+                anchor[2] + az * length,
+              );
+        return wasm.Manifold.hull([bottom, rear, tip]);
+      };
+      const heldParts = wasm.Manifold.union((layout?.bottles ?? []).map(held));
       const window = (row: number) =>
         wasm.Manifold.cube([params.unitsX * GRID_PITCH_MM, GRID_PITCH_MM - 1, 200], true).translate(
           0,
           (row + 0.5 - params.unitsY / 2) * GRID_PITCH_MM,
-          100 + FOOT_HEIGHT_MM + 3,
+          100,
         );
       for (let row = 0; row < params.unitsY; row++) {
-        const above = solids.reduce(
-          (sum, { solid }) => sum + solid.intersect(window(row)).volume(),
-          0,
-        );
-        expect(trimmed.has(row)).toBe(above > 1);
+        expect(trimmed.has(row)).toBe(heldParts.intersect(window(row)).volume() > 1);
       }
       for (const bottle of solvePaintRack(params)?.bottles ?? []) {
         expect(planRacks(params).some((r) => rackHoldsBottle(r, bottle))).toBe(true);
@@ -193,20 +222,14 @@ describe('paint rack for low drawers', () => {
     },
   );
 
-  it.each([
-    ['block', { fill: 'block' as const }],
-    ['filled', { fill: 'filled' as const }],
-  ])(
-    'gives every %s rack across the wide drawer the same material per cell and top level',
-    async (_name, overrides) => {
-      const wasm = await getManifold();
-      const racks = buildPaintRacks(wasm, classic(overrides));
-      const perCell = racks.map(({ rack, solid }) => solid.volume() / (rack.unitsX * rack.unitsY));
-      const tops = racks.map(({ solid }) => solid.boundingBox().max[2]);
-      expect(Math.min(...perCell) / Math.max(...perCell)).toBeGreaterThan(0.95);
-      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(0.1);
-    },
-  );
+  it('gives every rack across the wide drawer the same material per cell and top level', async () => {
+    const wasm = await getManifold();
+    const racks = buildPaintRacks(wasm, classic());
+    const perCell = racks.map(({ rack, solid }) => solid.volume() / (rack.unitsX * rack.unitsY));
+    const tops = racks.map(({ solid }) => solid.boundingBox().max[2]);
+    expect(Math.min(...perCell) / Math.max(...perCell)).toBeGreaterThan(0.95);
+    expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(0.1);
+  });
 
   it('adds a row when the drawer leaves room for the caps in front of the grid', () => {
     const tight = solvePaintRack(rack({ unitsY: 6 }));
@@ -216,63 +239,52 @@ describe('paint rack for low drawers', () => {
     expect(roomy?.frontOverhang).toBeLessThanOrEqual(35);
   });
 
-  it.each([
-    ['rib', {}],
-    ['block', { fill: 'block' as const }],
-  ])(
-    'splits a %s drawer into racks that fit together and carry every bottle',
-    async (_name, overrides) => {
-      const params = rack({
-        unitsX: 4,
-        unitsY: 4,
-        plateWidthMm: 100,
-        plateDepthMm: 100,
-        ...overrides,
-      });
-      const wasm = await getManifold();
-      const layout = solvePaintRack(params);
-      const tilt = layout?.tiltDeg ?? 0;
-      const racks = buildPaintRacks(wasm, params);
-      expect(racks).toHaveLength(4);
-      for (let i = 0; i < racks.length; i++) {
-        for (let j = i + 1; j < racks.length; j++) {
-          expect(racks[i].solid.intersect(racks[j].solid).volume()).toBeLessThan(0.01);
+  it('splits a drawer into racks that fit together and carry every bottle', async () => {
+    const params = rack({
+      unitsX: 4,
+      unitsY: 4,
+      plateWidthMm: 100,
+      plateDepthMm: 100,
+    });
+    const wasm = await getManifold();
+    const layout = solvePaintRack(params);
+    const tilt = layout?.tiltDeg ?? 0;
+    const racks = buildPaintRacks(wasm, params);
+    expect(racks).toHaveLength(4);
+    for (let i = 0; i < racks.length; i++) {
+      for (let j = i + 1; j < racks.length; j++) {
+        expect(racks[i].solid.intersect(racks[j].solid).volume()).toBeLessThan(0.01);
+      }
+    }
+    let crossing = 0;
+    for (const anchor of layout?.bottles ?? []) {
+      const bottle = bottleSolid(wasm, params, anchor, tilt);
+      const resting = bottle.translate(0, 0, -0.6);
+      let carriers = 0;
+      for (const { solid } of racks) {
+        expect(bottle.intersect(solid).volume()).toBeLessThan(0.01);
+        if (resting.intersect(solid).volume() > 0.5) {
+          carriers++;
         }
       }
-      let crossing = 0;
-      for (const anchor of layout?.bottles ?? []) {
-        const bottle = bottleSolid(wasm, params, anchor, tilt);
-        const resting = bottle.translate(0, 0, -0.6);
-        let carriers = 0;
-        for (const { solid } of racks) {
-          expect(bottle.intersect(solid).volume()).toBeLessThan(0.01);
-          if (resting.intersect(solid).volume() > 0.5) {
-            carriers++;
-          }
-        }
-        expect(carriers).toBeGreaterThanOrEqual(1);
-        if (carriers > 1) {
-          crossing++;
-        }
+      expect(carriers).toBeGreaterThanOrEqual(1);
+      if (carriers > 1) {
+        crossing++;
       }
-      // Bottles across rack seams rest on both racks.
-      expect(crossing).toBeGreaterThan(0);
-    },
-  );
+    }
+    // Bottles across rack seams rest on both racks.
+    expect(crossing).toBeGreaterThan(0);
+  });
 
-  it.each([
-    ['rib', {}],
-    ['cradle', { fill: 'cradles' as const }],
-    ['filled', { fill: 'filled' as const }],
-  ])('keeps %s supports below the mid height of the bottles', async (_name, overrides) => {
-    const params = rack({ unitsX: 3, unitsY: 4, ...overrides });
+  it('keeps the block below the mid height of the bottles', async () => {
+    const params = rack({ unitsX: 3, unitsY: 4 });
     const wasm = await getManifold();
     const body = buildPaintRack(wasm, params);
     const layout = solvePaintRack(params);
     expect(body.boundingBox().max[2]).toBeLessThan(0.6 * (layout?.binTop ?? 0));
   });
 
-  it('prints the braced ribs as one connected piece', async () => {
+  it('prints as one connected piece', async () => {
     const wasm = await getManifold();
     const parts = buildPaintRack(wasm, rack({ unitsX: 3, unitsY: 4 })).decompose();
     expect(parts).toHaveLength(1);
@@ -282,8 +294,6 @@ describe('paint rack for low drawers', () => {
     ['grid on Gridfinity', {}],
     ['staggered on Gridfinity', { arrangement: 'staggered' as const }],
     ['flat bottom', { gridfinity: false }],
-    ['cradles', { fill: 'cradles' as const }],
-    ['filled', { fill: 'filled' as const }],
   ])('keeps the %s rack below the drawer front', async (_name, overrides) => {
     const params = rack(overrides);
     const wasm = await getManifold();
@@ -297,7 +307,6 @@ describe('paint rack for low drawers', () => {
     ['5x5 staggered default', {}],
     ['3x4 grid', { arrangement: 'grid' as const, unitsX: 3, unitsY: 4 }],
     ['3x4 staggered', { unitsX: 3, unitsY: 4 }],
-    ['3x4 block', { unitsX: 3, unitsY: 4, fill: 'block' as const }],
   ])('keeps the %s bottles clear of the baseplate and the rack', async (_name, overrides) => {
     const params = rack(overrides);
     const { wasm, bottles, body } = await bottlesAndRack(params);
@@ -336,54 +345,30 @@ describe('paint rack for low drawers', () => {
     expect(flat?.tiltDeg ?? 0).toBeGreaterThan(gridfinity?.tiltDeg ?? 90);
   });
 
-  it('uses far less material with ribs than with cradles, and the most when filled', async () => {
-    const wasm = await getManifold();
+  it('backs the bottom of every bottle with a solid end stop', async () => {
     const params = rack({ unitsX: 3, unitsY: 2 });
-    const ribs = buildPaintRack(wasm, params);
-    const cradles = buildPaintRack(wasm, { ...params, fill: 'cradles' });
-    const filled = buildPaintRack(wasm, { ...params, fill: 'filled' });
-    expect(ribs.volume()).toBeLessThan(cradles.volume() / 3);
-    expect(filled.volume()).toBeGreaterThan(cradles.volume());
-  });
-
-  it('keeps every row of a filled rack at the height of the cradles', async () => {
-    const wasm = await getManifold();
-    const filled = buildPaintRack(wasm, rack({ fill: 'filled' }));
-    const cradles = buildPaintRack(wasm, rack({ fill: 'cradles' }));
-    expect(filled.boundingBox().max[2]).toBeLessThanOrEqual(cradles.boundingBox().max[2] + 0.1);
-  });
-
-  it.each([
-    ['rib', {}],
-    ['cradle', { fill: 'cradles' as const }],
-    ['filled', { fill: 'filled' as const }],
-  ])(
-    'backs the bottom of every bottle in a %s rack with a solid end stop',
-    async (_name, overrides) => {
-      const params = rack({ unitsX: 3, unitsY: 2, ...overrides });
-      const { wasm, layout, body } = await bottlesAndRack(params);
-      const tilt = ((layout?.tiltDeg ?? 0) * Math.PI) / 180;
-      const radius = pocketRadiusAt(params, 0);
-      const width = binSize(params).width;
-      // Probe behind the lower half of each bottle bottom, along its axis.
-      const behind = END_STOP_MM / 2;
-      const below = radius / 2;
-      for (const [x, y, z] of layout?.bottles ?? []) {
-        if (Math.abs(x) > width / 2 - 2) {
-          continue;
-        }
-        const py = y - behind * Math.cos(tilt) + below * Math.sin(tilt);
-        const pz = z - behind * Math.sin(tilt) - below * Math.cos(tilt);
-        for (const dx of [-below, 0, below]) {
-          const probe = wasm.Manifold.cube([0.6, 0.6, 0.6], true).translate(x + dx, py, pz);
-          expect(probe.intersect(body).volume()).toBeCloseTo(probe.volume(), 3);
-        }
+    const { wasm, layout, body } = await bottlesAndRack(params);
+    const tilt = ((layout?.tiltDeg ?? 0) * Math.PI) / 180;
+    const radius = pocketRadiusAt(params, 0);
+    const width = binSize(params).width;
+    // Probe behind the lower half of each bottle bottom, along its axis.
+    const behind = END_STOP_MM / 2;
+    const below = radius / 2;
+    for (const [x, y, z] of layout?.bottles ?? []) {
+      if (Math.abs(x) > width / 2 - 2) {
+        continue;
       }
-    },
-  );
+      const py = y - behind * Math.cos(tilt) + below * Math.sin(tilt);
+      const pz = z - behind * Math.sin(tilt) - below * Math.cos(tilt);
+      for (const dx of [-below, 0, below]) {
+        const probe = wasm.Manifold.cube([0.6, 0.6, 0.6], true).translate(x + dx, py, pz);
+        expect(probe.intersect(body).volume()).toBeCloseTo(probe.volume(), 3);
+      }
+    }
+  });
 
-  it('leaves no dust traps below the bottles when filled', async () => {
-    const params = rack({ fill: 'filled', unitsX: 3, unitsY: 2 });
+  it('leaves no dust traps below the bottles', async () => {
+    const params = rack({ unitsX: 3, unitsY: 2 });
     const { wasm, layout, body } = await bottlesAndRack(params);
     const tilt = ((layout?.tiltDeg ?? 0) * Math.PI) / 180;
     const radius = pocketRadiusAt(params, 0);
@@ -391,7 +376,7 @@ describe('paint rack for low drawers', () => {
     const halfDepth = depth / 2;
     let probes = 0;
     for (const [x, y, z] of layout?.bottles ?? []) {
-      // The fill rises below the bottles up to the level of the supports.
+      // The block rises below the bottles up to the level of its top.
       const level = z + params.supportLengthMm * Math.sin(tilt);
       for (const s of [5, 20, 40, 55]) {
         const py = y + s * Math.cos(tilt);
@@ -417,21 +402,6 @@ describe('paint rack for low drawers', () => {
     }
     expect(probes).toBeGreaterThan(10);
   });
-
-  it('adds no overhangs beyond the Gridfinity foot profile', async () => {
-    const wasm = await getManifold();
-    const ribs = await buildJobBundle(wasm, { generator: 'paintRack', params: rack() });
-    const cradles = await buildJobBundle(wasm, {
-      generator: 'paintRack',
-      params: rack({ fill: 'cradles' }),
-    });
-    const flat = await buildJobBundle(wasm, {
-      generator: 'paintRack',
-      params: rack({ gridfinity: false }),
-    });
-    expect(ribs.stats.overhangAreaMm2).toBeLessThanOrEqual(cradles.stats.overhangAreaMm2 + 1);
-    expect(flat.stats.overhangAreaMm2).toBeLessThan(1);
-  });
 });
 
 describe('paint rack modules in a row', () => {
@@ -439,7 +409,6 @@ describe('paint rack modules in a row', () => {
     rack({
       unitsX: 3,
       unitsY: 2,
-      fill: 'block',
       clearanceMm: 1.2,
       bottleGapMm: -0.3,
       maxHeightMm: 70,
@@ -551,6 +520,58 @@ describe('paint rack modules in a row', () => {
     expect(layout?.totalHeight).toBeLessThanOrEqual(70);
   });
 
+  it.each([
+    ['right', [3, 3, 3, 3, 2]],
+    ['left', [2, 3, 3, 3, 3]],
+    ['both', [1, 3, 3, 3, 3, 1]],
+    ['none', [3, 3, 3, 3]],
+  ] as const)('puts the end modules of a 14 unit drawer at the %s', (endModules, widths) => {
+    // A 240 mm plate holds whole modules of one three unit period.
+    const params = tiled({ unitsX: 14, endModules, plateWidthMm: 240 });
+    const row = planRacks(params).filter((rack) => rack.label.startsWith('A'));
+    expect(row.map((rack) => rack.unitsX)).toEqual(widths);
+    expect(row.map((rack) => rack.startX)).toEqual(
+      widths.map((_, index) => widths.slice(0, index).reduce((sum, width) => sum + width, 0)),
+    );
+  });
+
+  it('lays the pattern out so the end modules at both sides mirror each other', async () => {
+    const wasm = await getManifold();
+    const params = tiled({ unitsX: 16, endModules: 'both' });
+    const layout = solvePaintRack(params);
+    const mirrored = new Set(
+      (layout?.bottles ?? []).map(([x, y]) => `${(-x).toFixed(3)},${y.toFixed(3)}`),
+    );
+    for (const [x, y] of layout?.bottles ?? []) {
+      expect(mirrored.has(`${x.toFixed(3)},${y.toFixed(3)}`)).toBe(true);
+    }
+    const racks = buildPaintRacks(wasm, params);
+    const ends = racks.filter(
+      (entry) => entry.rack.unitsX === 2 && entry.rack.label.startsWith('A'),
+    );
+    expect(ends).toHaveLength(2);
+    const [left, right] = ends;
+    const flipped = left.solid.mirror([1, 0, 0]);
+    expect(flipped.subtract(right.solid).volume()).toBeLessThan(1e-6);
+    expect(right.solid.subtract(flipped).volume()).toBeLessThan(1e-6);
+  });
+
+  it('keeps every bottle on the whole modules when the rest of the drawer stays empty', () => {
+    const params = tiled({ unitsX: 14, endModules: 'none', plateWidthMm: 240 });
+    const layout = solvePaintRack(params);
+    const body = params.bottle.bodyDiameterMm / 2;
+    // Four whole modules of three units cover twelve of the fourteen units.
+    const freeSide = (12 - 7) * GRID_PITCH_MM;
+    expect(planRacks(params).every((rack) => rack.unitsX === 3)).toBe(true);
+    // Neither a bottle nor a pocket cut for a neighbor reaches past the free side.
+    for (const [x] of [...(layout?.bottles ?? []), ...(layout?.cutOnly ?? [])]) {
+      expect(x + body).toBeLessThanOrEqual(freeSide + 1e-6);
+    }
+    expect(Math.max(...(layout?.bottles ?? []).map(([x]) => x + body))).toBeGreaterThan(
+      freeSide - GRID_PITCH_MM,
+    );
+  });
+
   it('leaves the openings at the drawer side out of a rest narrower than three units', () => {
     const params = tiled({ unitsX: 14, unitsY: 6 });
     const layout = solvePaintRack(params);
@@ -598,32 +619,26 @@ describe('paint rack modules in a row', () => {
     }
   });
 
-  it.each([
-    ['block', {}],
-    ['ribs', { fill: 'ribs' as const }],
-  ])(
-    'lets the caps of a %s module reach over an identical module in front without touching it',
-    async (_name, overrides) => {
-      const wasm = await getManifold();
-      const params = tiled(overrides);
-      const layout = solvePaintRack(params);
-      expect(layout).not.toBeNull();
-      const tilt = layout?.tiltDeg ?? 0;
-      const body = buildPaintRack(wasm, params);
-      const inFront = body.translate(0, params.unitsY * GRID_PITCH_MM, 0);
-      const bottles = wasm.Manifold.union(
-        (layout?.bottles ?? []).map((anchor) => bottleSolid(wasm, params, anchor, tilt)),
-      );
-      expect(bottles.boundingBox().max[1]).toBeGreaterThan(inFront.boundingBox().min[1] + 10);
-      expect(bottles.intersect(inFront).volume()).toBeLessThan(0.5);
-      expect(bottles.intersect(body).volume()).toBeLessThan(0.5);
-    },
-  );
+  it('lets the caps of a module reach over an identical module in front without touching it', async () => {
+    const wasm = await getManifold();
+    const params = tiled();
+    const layout = solvePaintRack(params);
+    expect(layout).not.toBeNull();
+    const tilt = layout?.tiltDeg ?? 0;
+    const body = buildPaintRack(wasm, params);
+    const inFront = body.translate(0, params.unitsY * GRID_PITCH_MM, 0);
+    const bottles = wasm.Manifold.union(
+      (layout?.bottles ?? []).map((anchor) => bottleSolid(wasm, params, anchor, tilt)),
+    );
+    expect(bottles.boundingBox().max[1]).toBeGreaterThan(inFront.boundingBox().min[1] + 10);
+    expect(bottles.intersect(inFront).volume()).toBeLessThan(0.5);
+    expect(bottles.intersect(body).volume()).toBeLessThan(0.5);
+  });
 });
 
 describe('paint rack block with bores', () => {
   const block = (overrides: Partial<PaintRackParams> = {}) =>
-    rack({ unitsX: 3, unitsY: 2, fill: 'block', ...overrides });
+    rack({ unitsX: 3, unitsY: 2, ...overrides });
 
   it('holds the bottles from above yet lets them slide out along their axis', async () => {
     const params = block();
@@ -644,21 +659,111 @@ describe('paint rack block with bores', () => {
     }
   });
 
-  it('confines the overhang of its round bores to the short roofs over the bottle bottoms', async () => {
+  /** Where the roof of the bore over `anchor` leaves the block top, and that top height. */
+  const lipTip = (params: PaintRackParams, anchor: Vec3) => {
+    const layout = solvePaintRack(params);
+    const tilt = ((layout?.tiltDeg ?? 0) * Math.PI) / 180;
+    const length = Math.min(params.supportLengthMm, params.bottle.lengthMm);
+    const level = (layout?.bottles[0][2] ?? 0) + length * Math.sin(tilt);
+    const radius = pocketRadiusAt(params, 0);
+    const along = (level - anchor[2] - radius * Math.cos(tilt)) / Math.sin(tilt);
+    return { y: anchor[1] + along * Math.cos(tilt) - radius * Math.sin(tilt), level };
+  };
+
+  /** Material in a 0.2 mm cube of the body around a point. */
+  const probe = (wasm: ManifoldToplevel, body: Manifold, at: Vec3) =>
+    wasm.Manifold.cube([0.2, 0.2, 0.2], true).translate(at).intersect(body).volume();
+
+  /** Material of the body below height `z`. */
+  const below = (wasm: ManifoldToplevel, body: Manifold, z: number) =>
+    wasm.Manifold.cube([1000, 1000, 1000], true)
+      .translate(0, 0, z - 500)
+      .intersect(body)
+      .volume();
+
+  /** Bottles whose mouth lies inside the rack, away from its sides. */
+  const innerBottles = (params: PaintRackParams) =>
+    (solvePaintRack(params)?.bottles ?? []).filter(
+      (anchor) => Math.abs(anchor[0]) < binSize(params).width / 2 - 2,
+    );
+
+  it('ends the lip over each bottle thicker when the mouths start steeper', async () => {
     const wasm = await getManifold();
-    const ribs = await buildJobBundle(wasm, { generator: 'paintRack', params: rack() });
-    const params = rack({ fill: 'block' });
-    const bored = await buildJobBundle(wasm, { generator: 'paintRack', params });
-    const bottles = solvePaintRack(params)?.bottles.length ?? 0;
-    const extra = bored.stats.overhangAreaMm2 - ribs.stats.overhangAreaMm2;
-    expect(extra / bottles).toBeLessThan(200);
+    const plain = block({ easeMouths: false, roundMouths: false });
+    const eased = block({ roundMouths: false });
+    const plainBody = buildPaintRack(wasm, plain);
+    const easedBody = buildPaintRack(wasm, eased);
+    for (const anchor of innerBottles(plain)) {
+      const { y, level } = lipTip(plain, anchor);
+      // Half a millimeter behind its tip the plain lip is a feather; eased, the roof leaves the top sooner.
+      const nearTip: Vec3 = [anchor[0], y - 0.5, level - 0.15];
+      expect(probe(wasm, plainBody, nearTip)).toBeGreaterThan(0.005);
+      expect(probe(wasm, easedBody, nearTip)).toBeLessThan(1e-4);
+    }
+    // The bend sits in the top 4 mm; the bottle rest below stays as it was.
+    const { level } = lipTip(plain, innerBottles(plain)[0]);
+    expect(below(wasm, easedBody, level - 4)).toBeCloseTo(below(wasm, plainBody, level - 4), 2);
   });
 
-  it('ends every row at the same level as the cradles', async () => {
+  it('rounds the edges where the bores leave the top without touching the walls below', async () => {
     const wasm = await getManifold();
-    const bored = buildPaintRack(wasm, rack({ fill: 'block' }));
-    const cradles = buildPaintRack(wasm, rack({ fill: 'cradles' }));
-    expect(bored.boundingBox().max[2]).toBeLessThanOrEqual(cradles.boundingBox().max[2] + 0.1);
+    const plain = block({ easeMouths: false, roundMouths: false });
+    const rounded = block({ easeMouths: false });
+    const plainBody = buildPaintRack(wasm, plain);
+    const roundedBody = buildPaintRack(wasm, rounded);
+    for (const anchor of innerBottles(plain)) {
+      const { y, level } = lipTip(plain, anchor);
+      const nearTip: Vec3 = [anchor[0], y - 0.5, level - 0.15];
+      expect(probe(wasm, plainBody, nearTip)).toBeGreaterThan(0.005);
+      expect(probe(wasm, roundedBody, nearTip)).toBeLessThan(1e-4);
+    }
+    const { level } = lipTip(plain, innerBottles(plain)[0]);
+    expect(roundedBody.volume()).toBeLessThan(plainBody.volume());
+    expect(below(wasm, roundedBody, level - 1)).toBeCloseTo(below(wasm, plainBody, level - 1), 2);
+  });
+
+  it('blunts the point where the fin between two overlapping bores meets the top', async () => {
+    const wasm = await getManifold();
+    // Modules in a row with overlapping bores, the usual print setup.
+    const plain = block({
+      arrangement: 'grid',
+      clearanceMm: 1.2,
+      bottleGapMm: -0.7,
+      maxHeightMm: 70,
+      tileModules: true,
+      plateWidthMm: 256,
+      plateDepthMm: 256,
+      easeMouths: false,
+      roundMouths: false,
+    });
+    const blunted = { ...plain, roundMouths: true };
+    const plainBody = buildPaintRack(wasm, plain);
+    const bluntedBody = buildPaintRack(wasm, blunted);
+    const layout = solvePaintRack(plain);
+    const tilt = ((layout?.tiltDeg ?? 0) * Math.PI) / 180;
+    const [x, y, z] = layout?.bottles[1] ?? [0, 0, 0];
+    const pitch = (3 * GRID_PITCH_MM) / 5;
+    const radius = pocketRadiusAt(plain, 0);
+    const { level } = lipTip(plain, layout?.bottles[1] ?? [0, 0, 0]);
+    // The fin hangs from the top between two bores of a row; its rounded lower
+    // edge, 2 mm above the circle touching both bores, climbs through the top here.
+    const low = Math.sqrt((radius + 2) ** 2 - (pitch / 2) ** 2) - 2;
+    const along = (level - z - low * Math.cos(tilt)) / Math.sin(tilt);
+    const apex: Vec3 = [x + pitch / 2, y + along * Math.cos(tilt) - low * Math.sin(tilt), level];
+    const needle: Vec3 = [apex[0], apex[1] - 1.5, level - 0.2];
+    const body: Vec3 = [apex[0], apex[1] - 6, level - 2.5];
+    expect(probe(wasm, plainBody, needle)).toBeGreaterThan(0.005);
+    expect(probe(wasm, bluntedBody, needle)).toBeLessThan(1e-4);
+    expect(probe(wasm, plainBody, body)).toBeGreaterThan(0.005);
+    expect(probe(wasm, bluntedBody, body)).toBeGreaterThan(0.005);
+  });
+
+  it('confines the overhang of its round bores to the short roofs over the bottle bottoms', async () => {
+    const wasm = await getManifold();
+    const params = rack();
+    const bored = await buildJobBundle(wasm, { generator: 'paintRack', params });
+    const bottles = solvePaintRack(params)?.bottles.length ?? 0;
+    expect(bored.stats.overhangAreaMm2 / bottles).toBeLessThan(200);
   });
 
   it('packs five touching bottles across three grid units', () => {
@@ -696,6 +801,58 @@ describe('paint rack downloads', () => {
       expect(maxX - minX).toBeLessThanOrEqual(params.plateWidthMm);
       expect(minZ).toBeCloseTo(0, 3);
     }
+  });
+});
+
+describe('paint rack STL for the slicer', () => {
+  it('stays a closed surface when the slicer welds facets by position', async () => {
+    const wasm = await getManifold();
+    // Modules in a row, staggered: the kernel leaves vertices here that
+    // single precision cannot tell apart.
+    const params = { ...defaultPaintRackParams(), arrangement: 'staggered' as const };
+    const module = planRacks(params).find((rack) => rack.unitsX === 3 && rack.unitsY === 2);
+    expect(module).toBeDefined();
+    const solid = buildPaintRackModule(wasm, params, module ?? planRacks(params)[0]);
+    const view = new DataView(writeBinaryStl(toRawMesh(solid)));
+    const triangles = view.getUint32(80, true);
+    const ids = new Map<string, number>();
+    const edges = new Map<string, number>();
+    for (let t = 0; t < triangles; t++) {
+      const corners: number[] = [];
+      for (let v = 0; v < 3; v++) {
+        const offset = 84 + t * 50 + 12 + v * 12;
+        const key = [0, 4, 8].map((axis) => view.getFloat32(offset + axis, true)).join(',');
+        if (!ids.has(key)) {
+          ids.set(key, ids.size);
+        }
+        corners.push(ids.get(key) ?? -1);
+      }
+      for (let v = 0; v < 3; v++) {
+        const from = corners[v];
+        const to = corners[(v + 1) % 3];
+        expect(from).not.toBe(to);
+        const edge = from < to ? `${from}-${to}` : `${to}-${from}`;
+        edges.set(edge, (edges.get(edge) ?? 0) + (from < to ? 1 : 1000));
+      }
+    }
+    // Every edge runs once in each direction: two facets, opposite windings.
+    const torn = [...edges.values()].filter((uses) => uses !== 1001).length;
+    expect(torn).toBe(0);
+  });
+});
+
+describe('paint rack build progress', () => {
+  it('reports the racks of a drawer one by one as they are built', async () => {
+    const wasm = await getManifold();
+    const params = rack({ unitsX: 4, unitsY: 2, plateWidthMm: 100 });
+    const reports: { done: number; total: number; pieces: string }[] = [];
+    await buildJobBundle(wasm, { generator: 'paintRack', params }, (progress) => {
+      reports.push(progress);
+    });
+    expect(reports).toEqual([
+      { done: 1, total: 2, pieces: 'racks' },
+      { done: 2, total: 2, pieces: 'racks' },
+    ]);
   });
 });
 

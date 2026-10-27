@@ -94,11 +94,37 @@ body {
   position: absolute;
   top: 12px;
   right: 12px;
-  padding: 4px 10px;
-  border-radius: 4px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 12px;
+  align-items: baseline;
+  min-width: 220px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.busy-seconds {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.busy-bar {
+  grid-column: 1 / -1;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(232, 131, 58, 0.25);
+  overflow: hidden;
+}
+
+.busy-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 150ms ease-out;
 }
 
 .panel {

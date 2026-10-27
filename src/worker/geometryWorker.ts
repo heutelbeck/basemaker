@@ -5,7 +5,7 @@ import type { PartsDownload } from '../export/partsDownload.ts';
 import { writeBinaryStl } from '../export/stlBinary.ts';
 import type { ThreeMfPart } from '../export/threeMf.ts';
 import { writeThreeMfParts } from '../export/threeMf.ts';
-import type { Job, JobBundle, JobPart } from '../generators/job.ts';
+import type { Job, JobBundle, JobPart, ProgressListener } from '../generators/job.ts';
 import { buildJobBundle, buildJobMesh, buildJobStep, jobFilename } from '../generators/job.ts';
 import { registerLocalFont } from '../geometry/lettering/font.ts';
 import { getManifold } from '../geometry/manifoldContext.ts';
@@ -50,9 +50,9 @@ const api = {
   registerFont(family: string, buffer: ArrayBuffer): void {
     registerLocalFont(family, buffer);
   },
-  async build(job: Job): Promise<BuildOutput> {
+  async build(job: Job, onProgress?: ProgressListener): Promise<BuildOutput> {
     const wasm = await getManifold();
-    const bundle = await buildJobBundle(wasm, job);
+    const bundle = await buildJobBundle(wasm, job, onProgress);
     rememberParts(job, bundle.parts);
     const buffers = bundle.parts.flatMap((part) => [
       part.mesh.positions.buffer,

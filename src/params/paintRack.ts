@@ -19,15 +19,8 @@ export interface BottleProfile {
 export type PaintRackOrientation = 'upright' | 'tilted';
 export type PaintRackTiltMode = 'angle' | 'maxHeight';
 export type PaintRackArrangement = 'grid' | 'staggered';
-/**
- * Ribs: braced thin walls and hollow feet, the fastest and lightest print.
- * Cradles: solid supports under the supported rear part of each bottle.
- * Filled: everything below the bottles is material, closed and easy to dust.
- * Block: a solid block with a tilted round bore per bottle that holds it
- * from all sides; bores closer than their diameter run into each other.
- */
-export type PaintRackFill = 'ribs' | 'cradles' | 'filled' | 'block';
-
+/** Where the rest of a drawer that whole modules in a row do not fill goes. */
+export type PaintRackEndModules = 'right' | 'left' | 'both' | 'none';
 /**
  * Paint bottle racks for a whole drawer of unitsX by unitsY Gridfinity
  * cells. One bottle pattern spans the drawer, and the drawer is split into
@@ -49,9 +42,16 @@ export interface PaintRackParams {
   unitsY: number;
   gridfinity: boolean;
   baseplateHeightMm: number;
-  fill: PaintRackFill;
-  /** Length along a tilted bottle, from its bottom, that the supports carry. */
+  /** Length along a tilted bottle, from its bottom, that the block holds. */
   supportLengthMm: number;
+  /**
+   * Bends the top of every tilted bore a few degrees steeper over the last
+   * millimeters below the block top, so the lip over each bottle and the
+   * points between neighboring bore mouths end thicker.
+   */
+  easeMouths: boolean;
+  /** Rounds the edges where the bores leave the top of the block. */
+  roundMouths: boolean;
   /** Free room behind the drawer grid (+Y) that tilted caps may reach into. */
   frontRoomMm: number;
   /**
@@ -60,6 +60,13 @@ export interface PaintRackParams {
    * behind, and the caps of the rearmost row reach freely past the grid.
    */
   tileModules: boolean;
+  /**
+   * Which sides of a drawer of modules in a row get a narrower end module
+   * for the grid units the whole modules leave: the right side, the left,
+   * both (an end module on each side, mirror images of each other), or
+   * none, leaving those units empty beside the last whole module.
+   */
+  endModules: PaintRackEndModules;
   plateWidthMm: number;
   plateDepthMm: number;
   /** Leaves out drawer grid rows that carry no support, such as rows only caps reach over. */
@@ -101,8 +108,6 @@ export const FOOT_CORE_HALF_MM = 17;
 const BASEPLATE_PROFILE_HEIGHT_MM = 4.65;
 /** Thickness of the solid end stop behind a tilted bottle's bottom. */
 export const END_STOP_MM = 2.4;
-/** Length along a tilted bottle, from its bottom, of the solid cup below it. */
-export const BOTTOM_CUP_MM = 10;
 /** Air kept between a bottle pocket and the baseplate ridge crest. */
 const RIDGE_CLEARANCE_MM = 0.3;
 const MIN_TILT_DEG = 5;
@@ -128,10 +133,12 @@ export function defaultPaintRackParams(): PaintRackParams {
     unitsY: 6,
     gridfinity: true,
     baseplateHeightMm: 6,
-    fill: 'block',
     supportLengthMm: 35,
+    easeMouths: true,
+    roundMouths: true,
     frontRoomMm: 0,
     tileModules: true,
+    endModules: 'right',
     plateWidthMm: BAMBU_X2D_PLATE_MM,
     plateDepthMm: BAMBU_X2D_PLATE_MM,
     trimEmptyRows: true,
@@ -373,7 +380,41 @@ function rackWidths(params: PaintRackParams): number[] {
   if (!tilesModules(params)) {
     return splitUnits(params.unitsX, max);
   }
-  return periodSplit(params.unitsX, max, tilePeriod(params).units);
+  const { left, whole, right } = endModuleWidths(params);
+  return [...(left > 0 ? [left] : []), ...whole, ...(right > 0 ? [right] : [])];
+}
+
+/**
+ * Widths of the end modules and the whole modules of a drawer of modules
+ * in a row: the whole modules take the most lateral periods that fit the
+ * plate, the units left over go to the sides the end modules option
+ * names, or stay empty. A drawer narrower than a whole module is one
+ * rack whatever the option says.
+ */
+function endModuleWidths(params: PaintRackParams): {
+  left: number;
+  whole: number[];
+  right: number;
+} {
+  const max = maxRackUnits(params.plateWidthMm);
+  const period = tilePeriod(params).units;
+  const full = Math.max(1, Math.floor(max / period)) * period;
+  const count = Math.floor(params.unitsX / full);
+  if (count === 0) {
+    return { left: 0, whole: [params.unitsX], right: 0 };
+  }
+  const whole = Array.from({ length: count }, () => full);
+  const rest = params.unitsX - count * full;
+  switch (params.endModules) {
+    case 'right':
+      return { left: 0, whole, right: rest };
+    case 'left':
+      return { left: rest, whole, right: 0 };
+    case 'both':
+      return { left: Math.floor(rest / 2), whole, right: rest - Math.floor(rest / 2) };
+    case 'none':
+      return { left: 0, whole, right: 0 };
+  }
 }
 
 /**
@@ -415,26 +456,34 @@ function periodSplit(total: number, max: number, period: number): number[] {
 function tiledRowXs(params: PaintRackParams, seamRow: boolean): { xs: number[]; edges: number[] } {
   const { pitch, units } = tilePeriod(params);
   const widths = rackWidths(params);
-  // Only racks of whole periods match their neighbors; a narrower rest
-  // leaves the openings at the drawer side out.
-  const wholeLeft = widths[0] % units === 0;
-  const wholeRight = widths[widths.length - 1] % units === 0;
+  const { left } = endModuleWidths(params);
   const half = (params.unitsX * GRID_PITCH_MM) / 2;
+  // The racks fill the drawer from the left wall; what they leave stays empty.
+  const covered = widths.reduce((sum, width) => sum + width, 0);
+  const low = -half;
+  const high = -half + covered * GRID_PITCH_MM;
+  // Only racks of whole periods at a drawer wall match their neighbors; a
+  // narrower end module or a free side leaves the openings at the side out.
+  const wholeLeft = widths[0] % units === 0;
+  const wholeRight = widths[widths.length - 1] % units === 0 && covered === params.unitsX;
   const body = params.bottle.bodyDiameterMm / 2;
   const reach = pocketRadiusAt(params, 0) + 1;
   const xs: number[] = [];
   const edges: number[] = [];
-  const first = Math.floor(-reach / pitch) - 1;
+  // The pattern starts at the first whole module, so end modules on both
+  // sides mirror each other.
+  const origin = low + left * GRID_PITCH_MM;
+  const first = Math.floor((low - reach - origin) / pitch) - 1;
   for (let k = first; ; k++) {
-    const x = -half + (k + (seamRow ? 0 : 0.5)) * pitch;
-    if (x > half + reach) {
+    const x = origin + (k + (seamRow ? 0 : 0.5)) * pitch;
+    if (x > high + reach) {
       break;
     }
     // As at every seam, an outermost pocket may open through the side wall
     // as long as the bottle itself stays on the grid.
-    if (Math.abs(x) + body <= half + 1e-6) {
+    if (x - body >= low - 1e-6 && x + body <= high + 1e-6) {
       xs.push(x);
-    } else if (Math.abs(x) < half + reach && (x < 0 ? wholeLeft : wholeRight)) {
+    } else if (x < low + body ? wholeLeft && x > low - reach : wholeRight && x < high + reach) {
       edges.push(x);
     }
   }
