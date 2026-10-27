@@ -78,34 +78,6 @@ export const GENERATOR_LABELS: Record<GeneratorId, string> = {
   baseplate: 'Gridfinity baseplate',
 };
 
-/** Name of each generator in the URL fragment, so a link opens it directly. */
-const GENERATOR_SLUGS: Record<GeneratorId, string> = {
-  base: 'base',
-  movementTray: 'movement-tray',
-  adapterTray: 'adapter-tray',
-  rock: 'rock',
-  crystal: 'crystal',
-  plants: 'plants',
-  ruler: 'ruler',
-  template: 'template',
-  paintRack: 'paint-rack',
-  baseplate: 'baseplate',
-};
-
-/** The URL fragment naming a generator, without the hash sign. */
-export function generatorSlug(generator: GeneratorId): string {
-  return GENERATOR_SLUGS[generator];
-}
-
-/** The generator a URL fragment names, with or without its hash sign; null for anything else. */
-export function generatorFromSlug(fragment: string): GeneratorId | null {
-  const slug = fragment.startsWith('#') ? fragment.slice(1) : fragment;
-  const match = (Object.keys(GENERATOR_SLUGS) as GeneratorId[]).find(
-    (id) => GENERATOR_SLUGS[id] === slug,
-  );
-  return match ?? null;
-}
-
 const ERROR_STEP_PAINT_RACK = 'STEP export of paint racks is not yet implemented.';
 const ERROR_STEP_MESH_ONLY =
   'This generator produces organic mesh geometry and has no STEP form; export STL or 3MF instead.';

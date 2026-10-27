@@ -242,6 +242,32 @@ describe('baseplate solid filler', () => {
   });
 });
 
+describe('baseplate beside a sliver of filler', () => {
+  it('keeps every part inside the drawer outline when a grid line runs close to a wall', async () => {
+    // Half a millimeter of filler each side: the first grid line lies within half a bar of the wall.
+    const params = baseplate({
+      drawerWidthMm: 7 * GRID_PITCH_MM + 2,
+      drawerDepthMm: 2 * GRID_PITCH_MM + 1,
+    });
+    await withParts(params, (wasm, parts) => {
+      for (const { piece, solid } of parts) {
+        const inside = wasm.Manifold.cube([piece.width, piece.depth, 20], true).translate(
+          piece.centerX,
+          piece.centerY,
+          5,
+        );
+        const outside = solid.subtract(inside);
+        try {
+          expect(outside.volume()).toBeLessThan(1e-6);
+        } finally {
+          inside.delete();
+          outside.delete();
+        }
+      }
+    });
+  });
+});
+
 describe('baseplate for an IKEA Alex wide drawer', () => {
   const alex = baseplate({ drawerWidthMm: 600, drawerDepthMm: 423 });
 

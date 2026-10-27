@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { GeneratorId } from './generators/job.ts';
-import { GENERATOR_LABELS, defaultJobFor, generatorFromSlug } from './generators/job.ts';
+import { GENERATOR_LABELS, defaultJobFor } from './generators/job.ts';
 import { PreviewCanvas } from './preview/PreviewCanvas.tsx';
 import { bootstrapGeometry, useAppStore } from './state/store.ts';
 import { BusyBadge } from './ui/BusyBadge.tsx';
@@ -44,15 +44,6 @@ export function App() {
 
   useEffect(() => {
     bootstrapGeometry();
-    // Back, forward and an edited address switch the generator like the dropdown does.
-    const followFragment = () => {
-      const named = generatorFromSlug(window.location.hash);
-      if (named !== null && named !== useAppStore.getState().job.generator) {
-        useAppStore.getState().replaceJob(defaultJobFor(named));
-      }
-    };
-    window.addEventListener('hashchange', followFragment);
-    return () => window.removeEventListener('hashchange', followFragment);
   }, []);
 
   return (

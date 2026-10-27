@@ -392,7 +392,9 @@ export const BASEPLATE_CUT_MM = 1;
 
 /**
  * Bar span across a line at `at` within [lo, hi]: centered on inner lines,
- * kept inside the part on its edges so seams and walls get full bars.
+ * kept inside the part on its edges so seams and walls get full bars, and
+ * never past the part: a line within half a bar of a wall, as beside a
+ * sliver of filler, would otherwise leave a fin outside the wall.
  */
 function barSpan(at: number, lo: number, hi: number, width: number): [number, number] {
   if (Math.abs(at - lo) < 1e-6) {
@@ -401,7 +403,7 @@ function barSpan(at: number, lo: number, hi: number, width: number): [number, nu
   if (Math.abs(at - hi) < 1e-6) {
     return [hi - width, hi];
   }
-  return [at - width / 2, at + width / 2];
+  return [Math.max(lo, at - width / 2), Math.min(hi, at + width / 2)];
 }
 
 /**

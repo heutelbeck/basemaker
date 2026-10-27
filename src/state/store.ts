@@ -1,14 +1,8 @@
 import { create } from 'zustand';
-import type { BuildProgress, GeneratorId, Job, JobPart, JobStats } from '../generators/job.ts';
+import type { BuildProgress, Job, JobPart, JobStats } from '../generators/job.ts';
 import type { PartsDownload } from '../export/partsDownload.ts';
 import type { RawMesh } from '../geometry/mesh.ts';
-import {
-  defaultJob,
-  defaultJobFor,
-  generatorFromSlug,
-  generatorSlug,
-  validateJob,
-} from '../generators/job.ts';
+import { defaultJob, validateJob } from '../generators/job.ts';
 import type { BaseParams } from '../params/types.ts';
 import type { ValidationIssue } from '../params/validate.ts';
 import { registerLocalFont } from '../geometry/lettering/font.ts';
@@ -64,29 +58,7 @@ function geometryClient(): GeometryClient {
   return client;
 }
 
-/** The job a page opens with: the generator its URL fragment names, or the base. */
-function initialJob(): Job {
-  const generator = typeof window === 'undefined' ? null : generatorFromSlug(window.location.hash);
-  return generator === null ? defaultJob() : defaultJobFor(generator);
-}
-
-/**
- * Keeps the URL fragment naming the active generator, so the address bar
- * always holds a link to it. The entry is replaced, not pushed, so the
- * history does not fill up with every change.
- */
-function syncFragment(generator: GeneratorId): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  const fragment = `#${generatorSlug(generator)}`;
-  if (window.location.hash !== fragment) {
-    window.history.replaceState(null, '', fragment);
-  }
-}
-
 function applyJob(job: Job): Partial<AppState> {
-  syncFragment(job.generator);
   const issues = validateJob(job);
   if (issues.length === 0) {
     geometryClient().requestBuild(job);
@@ -96,7 +68,7 @@ function applyJob(job: Job): Partial<AppState> {
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  job: initialJob(),
+  job: defaultJob(),
   issues: [],
   parts: null,
   stats: null,
